@@ -36,6 +36,7 @@ on:
       - '.github/workflows/marp-deploy.yml'
       - '*.png'
   workflow_dispatch:
+  workflow_call:
 
 # Allow one concurrent deployment; cancel any in-progress run on new push.
 concurrency:
