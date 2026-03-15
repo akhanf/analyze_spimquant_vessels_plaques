@@ -420,13 +420,6 @@ regional_dataframe.ipynb
 
 > Stacked bar charts of categorized plaque-vessel proximity
 
----
-
-## SDT Distribution by Treatment & Genotype
-
-![w:900px](fig_sdt_ecdf.png)
-
-> ECDF of signed distance transform (SDT) values. Negative SDT = inside vessel. Treatment shifts the distribution towards **less negative** values, suggesting preferential clearance of intravascular plaques.
 
 
 ---
