@@ -1,12 +1,15 @@
 # Marp Slide-Deck — Build & Deploy
 #
 # This workflow converts presentation.md into HTML and PDF slides using
-# Marp CLI, then publishes the HTML deck to GitHub Pages.
+# Marp CLI (via npx), then publishes the HTML deck to GitHub Pages.
 #
 # ── HOW TO ENABLE DEPLOYMENT ────────────────────────────────────────────────
 # 1. Go to your repository on GitHub.
 # 2. Navigate to  Settings → Pages.
 # 3. Under "Build and deployment", set Source to "GitHub Actions".
+#    NOTE: Setting the source to "GitHub Actions" disables the automatic
+#    Jekyll build (pages-build-deployment). The rendered Marp HTML will be
+#    served instead.
 # 4. Push a commit to the main branch (or manually trigger this workflow).
 #    The HTML slide-deck will be published at:
 #    https://<owner>.github.io/<repository>/
@@ -53,19 +56,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build HTML presentation
-        uses: marp-team/marp-action@v2
-        with:
-          input: presentation.md
-          output: _site/index.html
-          html: true
-          allowLocalFiles: true
+        run: |
+          mkdir -p _site
+          npx -y @marp-team/marp-cli@latest --html --allow-local-files presentation.md -o _site/index.html
 
       - name: Build PDF presentation
-        uses: marp-team/marp-action@v2
-        with:
-          input: presentation.md
-          output: _site/presentation.pdf
-          allowLocalFiles: true
+        run: |
+          npx -y @marp-team/marp-cli@latest --allow-local-files presentation.md -o _site/presentation.pdf
 
       - name: Copy figures to site output
         run: |
