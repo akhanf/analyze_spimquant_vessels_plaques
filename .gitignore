@@ -3,3 +3,6 @@
 # pixi environments
 .pixi
 *.egg-info
+
+# generated intermediate data files
+roi_data.parquet
