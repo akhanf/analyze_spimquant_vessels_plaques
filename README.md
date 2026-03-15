@@ -31,3 +31,44 @@ which is also sampled at each point (`sdt_CD31`).
 The ApoE isoform (`genotype`), `sex` and type of injection (`treatment`) is annotated 
 for each `subject` plaque instance. 
 
+## Slide deck
+
+A [Marp](https://marp.app)-based presentation summarising the methods and results is
+available in [`presentation.md`](presentation.md).
+
+### Building the slides locally
+
+You need [Node.js](https://nodejs.org) installed, then run:
+
+```bash
+# Install Marp CLI (one-time)
+npm install -g @marp-team/marp-cli
+
+# Build HTML slides
+marp presentation.md --html --allow-local-files --output slides.html
+
+# Build PDF slides
+marp presentation.md --allow-local-files --output presentation.pdf
+```
+
+### Enabling GitHub Pages deployment
+
+The included GitHub Actions workflow (`.github/workflows/marp-deploy.yml`) automatically
+builds and publishes the slide deck to GitHub Pages on every push to `main`.
+
+To activate it:
+
+1. Go to your repository on GitHub and open **Settings → Pages**.
+2. Under **Build and deployment**, set the **Source** to **GitHub Actions**.
+3. Push any change to `main` (or trigger the workflow manually via
+   **Actions → Build and Deploy Marp Slides → Run workflow**).
+
+The live slide deck will be available at:
+
+```
+https://<owner>.github.io/<repository>/
+```
+
+A PDF version of the slides is also saved as a downloadable workflow artifact
+(`presentation-pdf`) after each run.
+
