@@ -77,7 +77,6 @@ style: |
 3. **Analysis Pipeline** — Overview of 5-notebook workflow
 4. **Methods** — Regional, treatment & vascular analyses
 5. **Results** — Regional burden, treatment effects, vessel proximity
-6. **Conclusions** — Key findings & future directions
 
 ---
 
@@ -107,7 +106,7 @@ style: |
 
 **Experimental model:**
 - Humanized mouse model of Alzheimer's disease
-- ApoE3 and ApoE4 knock-in alleles
+- hAppNL-F-hMAPT-APOE4 and hAppNL-F-hMAPT-APOE3
 
 **Treatment arms:**
 | Group | Description |
@@ -417,9 +416,9 @@ regional_dataframe.ipynb
 
 ## Plaque–Vessel Proximity Fractions
 
-![w:900px](fig_proximity_fractions.png)
+![w:900px](fig_proximity_fractions_stacked.png)
 
-> Stacked bar charts of proximity-category fractions per group. A notable proportion of plaques reside **inside vessel lumens**, with treatment-dependent shifts in the intravascular fraction.
+> Stacked bar charts of categorized plaque-vessel proximity
 
 ---
 
@@ -429,15 +428,6 @@ regional_dataframe.ipynb
 
 > ECDF of signed distance transform (SDT) values. Negative SDT = inside vessel. Treatment shifts the distribution towards **less negative** values, suggesting preferential clearance of intravascular plaques.
 
-
-<!-- _class: section-break lead -->
-
-
-## Thank You
-
-**Data:** Light-sheet microscopy Aβ plaque segmentation, Alzheimer's mouse models
-**Analysis:** Regional burden · Treatment effects · Vascular proximity
-**Tools:** Python · Jupyter · Pixi · Allen Brain Atlas v3
 
 ---
 
