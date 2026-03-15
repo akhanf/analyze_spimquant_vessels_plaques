@@ -1,0 +1,52 @@
+# Run Notebooks & Regenerate Figures
+#
+# This workflow executes all Jupyter notebooks in order using the pixi
+# environment, regenerating all PNG figures committed to the repository.
+# After the notebooks finish, any changed files (notebooks + figures) are
+# committed back to the branch that triggered the run.
+#
+# Once the commit is pushed, the "Build and Deploy Marp Slides" workflow
+# (marp-deploy.yml) is triggered directly via workflow_call so that the
+# updated figures are immediately reflected in the published slide deck.
+#
+# ── HOW TO TRIGGER ───────────────────────────────────────────────────────────
+# 1. Go to  Actions → Run Notebooks & Regenerate Figures.
+# 2. Click "Run workflow", choose the branch, and click the green button.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Run Notebooks & Regenerate Figures
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  run-notebooks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: v0.41.4
+          cache: true
+
+      - name: Execute all notebooks
+        run: pixi run run_notebooks
+
+      - name: Commit regenerated figures and notebooks
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: regenerate figures and notebooks"
+          file_pattern: "*.ipynb *.png"
+
+  deploy-slides:
+    name: Deploy updated slides
+    needs: run-notebooks
+    uses: ./.github/workflows/marp-deploy.yml
