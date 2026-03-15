@@ -77,7 +77,6 @@ style: |
 3. **Analysis Pipeline** — Overview of 5-notebook workflow
 4. **Methods** — Regional, treatment & vascular analyses
 5. **Results** — Regional burden, treatment effects, vessel proximity
-6. **Conclusions** — Key findings & future directions
 
 ---
 
@@ -107,7 +106,7 @@ style: |
 
 **Experimental model:**
 - Humanized mouse model of Alzheimer's disease
-- ApoE3 and ApoE4 knock-in alleles
+- hAppNL-F-hMAPT-APOE4 and hAppNL-F-hMAPT-APOE3
 
 **Treatment arms:**
 | Group | Description |
@@ -399,9 +398,9 @@ regional_dataframe.ipynb
 
 ## Plaque Size Distribution
 
-![w:900px](fig_violin_plaque_size.png)
+![w:900px](fig_size_distribution_by_genotype.png)
 
-> Violin plots of per-plaque size distributions reveal that Lecanemab preferentially clears **larger plaques**. The effect is consistent across both ApoE3 and ApoE4 mice.
+> Histogram of per-plaque size distributions reveals that Lecanemab in ApoE3 mice more effectively clears smaller plaques than in ApoE4 mice. 
 
 ---
 
@@ -409,7 +408,7 @@ regional_dataframe.ipynb
 
 ![w:900px](fig_interaction_plots.png)
 
-> Interaction plots highlight that **ApoE4** mice show a greater absolute reduction in plaque burden following Lecanemab treatment compared to ApoE3 mice.
+> Interaction plots highlight that **ApoE3** mice show a greater absolute reduction in plaque burden following Lecanemab treatment compared to ApoE4 mice. 
 
 ---
 
@@ -417,94 +416,11 @@ regional_dataframe.ipynb
 
 ## Plaque–Vessel Proximity Fractions
 
-![w:900px](fig_proximity_fractions.png)
+![w:900px](fig_proximity_fractions_stacked.png)
 
-> Stacked bar charts of proximity-category fractions per group. A notable proportion of plaques reside **inside vessel lumens**, with treatment-dependent shifts in the intravascular fraction.
+> Stacked bar charts of categorized plaque-vessel proximity
 
----
 
-## SDT Distribution by Treatment & Genotype
-
-![w:900px](fig_sdt_ecdf.png)
-
-> ECDF of signed distance transform (SDT) values. Negative SDT = inside vessel. Treatment shifts the distribution towards **less negative** values, suggesting preferential clearance of intravascular plaques.
-
----
-
-<!-- _class: light -->
-
-## Vessel Calibre of Intravascular Plaques
-
-![w:900px](fig_vessel_calibre_ecdf.png)
-
-> Minimum vessel calibre estimated for plaques residing inside vessel lumens. The distribution characterises the range of vessel sizes harbouring Aβ plaques and whether treatment affects which vessels are cleared.
-
----
-
-<!-- _class: section-break lead -->
-
-# Conclusions
-
----
-
-<!-- _class: light -->
-
-## Key Findings
-
-**1. Regional burden**
-- Plaque density is highest in cortical, hippocampal, and limbic regions
-- Atlas heatmaps provide unbiased whole-brain spatial maps
-
-**2. Treatment effects**
-- **Lecanemab significantly reduces** overall Aβ plaque burden
-- Effect is **ApoE genotype-dependent**: ApoE4 mice show greater clearance
-- Lecanemab preferentially clears **larger plaques**
-
-**3. Vascular relationships**
-- ~54% of plaques reside **inside or immediately adjacent** to blood vessels
-- Lecanemab shifts plaques away from the vascular compartment
-- Intravascular plaques occupy **small-calibre capillaries**
-
----
-
-<!-- _class: light -->
-
-## Future Directions
-
-<div class="columns">
-<div>
-
-**Statistical modelling**
-- Mixed-effects models accounting for regional and subject-level variance
-- Mediation analysis: does vessel proximity mediate treatment response?
-
-**Spatial statistics**
-- Point-process models of plaque clustering
-- Graph-based analysis of plaque networks
-
-</div>
-<div>
-
-**Extended phenotyping**
-- Sex-stratified analyses
-- Longitudinal comparisons across time-points
-
-**Multi-modal integration**
-- Correlation with cognitive behavioural data
-- Co-registration with tau / synaptic markers
-
-</div>
-</div>
-
----
-
-<!-- _class: lead invert -->
-
-## Thank You
-
-**Data:** Light-sheet microscopy Aβ plaque segmentation, Alzheimer's mouse models
-**Analysis:** Regional burden · Treatment effects · Vascular proximity
-**Tools:** Python · Jupyter · Pixi · Allen Brain Atlas v3
 
 ---
 
