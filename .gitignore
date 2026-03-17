@@ -7,3 +7,7 @@
 # snakemake
 .snakemake
 logs/
+
+# Python cache
+__pycache__/
+*.pyc
