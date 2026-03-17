@@ -13,3 +13,4 @@ data_late.parquet
 roi_data.parquet
 roi_data_early.parquet
 roi_data_late.parquet
+*.png
