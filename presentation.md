@@ -76,7 +76,7 @@ style: |
 2. **Dataset** — Cohort, imaging modality, data structure
 3. **Analysis Pipeline** — Overview of 5-notebook workflow
 4. **Methods** — Regional, treatment & vascular analyses
-5. **Results** — Regional burden, treatment effects, vessel proximity
+5. **Results** — Two cohorts: *Early* (3–6 mo) and *Late* (12–15 mo) treatment
 
 ---
 
@@ -165,14 +165,26 @@ A plaque's `sdt_CD31` value encodes its distance to the nearest vessel wall:
 
 <!-- _class: light -->
 
-## Dataset Overview
+## Two Cohorts: Early vs Late Treatment
 
 <div class="columns">
 <div>
 
-**`data.parquet`** — ~1.15 million instance-level plaque records
+**Early cohort** (`data_early.parquet`)
+- Lecanemab injections at **3–6 months**
+- Light-sheet imaging at **12 months**
 
-**Plaque metrics:**
+**Late cohort** (`data_late.parquet`)
+- Lecanemab injections at **12–15 months**
+- Light-sheet imaging at **15 months**
+
+> Each cohort is analysed independently; figures are saved as  
+> `fig_early_*.png` and `fig_late_*.png`
+
+</div>
+<div>
+
+**Per-cohort plaque metrics:**
 - `nvoxels` — voxel count (min: 200)
 - `plaque_vol_ml` — volume (µL)
 - `equiv_diam_um` — equivalent spherical diameter
@@ -180,16 +192,6 @@ A plaque's `sdt_CD31` value encodes its distance to the nearest vessel wall:
 **Spatial coordinates:**
 - `pos_x / y / z` — raw image space
 - `template_x / y / z` — CCFv3 template space
-
-</div>
-<div>
-
-**Anatomical labelling:**
-- `label` — Allen Brain Atlas v3 region name
-- `index` — ABA region index (2,655 regions)
-
-**Vascular proximity:**
-- `sdt_CD31` — signed distance to CD31⁺ vessel (mm)
 
 **Demographics:**
 - `subject` — individual animal ID
@@ -214,18 +216,22 @@ A plaque's `sdt_CD31` value encodes its distance to the nearest vessel wall:
 
 ```
 import_data.ipynb
-   │  Load data.parquet · Inspect schema · Summary statistics
+   │  Load raw data · Derive metrics
+   │  → data_early.parquet  +  data_late.parquet
    ▼
 regional_dataframe.ipynb
-   │  Classify plaque–vessel proximity
+   │  Classify plaque–vessel proximity (per dataset)
    │  Aggregate to per-subject × per-region ROI summaries
-   │  Compute regional plaque density  →  roi_data.parquet
+   │  → roi_data_early.parquet  +  roi_data_late.parquet
    ├──▶ regional_analysis.ipynb
    │       Atlas heatmaps · ROI rankings · Fold-change maps
+   │       → fig_{early|late}_atlas_*.png  etc.
    ├──▶ treatment_effect_analysis.ipynb
    │       Two-way ANOVA · Post-hoc comparisons · ECDFs
+   │       → fig_{early|late}_boxplots_*.png  etc.
    └──▶ vessel_spatial_analysis.ipynb
            SDT distributions · Proximity fractions · Vessel calibre
+           → fig_{early|late}_sdt_ecdf.png  etc.
 ```
 
 > **Reproducibility:** All notebooks executed via `pixi run run_notebooks`  
@@ -245,15 +251,15 @@ regional_dataframe.ipynb
 
 **Step 1 — Plaque size filtering**
 - Minimum size threshold: **200 voxels** (~1,408 µm³ at 1.6 × 1.6 × 2.75 µm voxel size)
-- Ensures only genuine plaques; no upper size limit applied
+- Maximum: 1×10⁻⁴ mL (removes implausibly large objects)
 
 **Step 2 — Plaque–vessel proximity classification**
 
-| Category | Criterion | Count |
-|---|---|---|
-| Inside vessel | SDT < 0 | **622,701** |
-| Near vessel | 0 ≤ SDT < 5 µm | **208,896** |
-| Far from vessel | SDT ≥ 5 µm | **325,894** |
+| Category | Criterion |
+|---|---|
+| Inside vessel | SDT < 0 |
+| Near vessel | 0 ≤ SDT < 5 µm |
+| Far from vessel | SDT ≥ 5 µm |
 
 **Step 3 — Regional aggregation**
 - Each plaque mapped to an ABA v3 atlas region
@@ -274,10 +280,6 @@ regional_dataframe.ipynb
 - **Treatment fold-change** — Log₂(Lecanemab / PBS) per ROI
 - **Atlas heatmaps** — Max-intensity projections of density and fold-change painted onto the 3-D Allen Brain Atlas volume (3 orthogonal views)
 
-**Statistical outputs:**
-- Subject-mean summaries per ROI
-- Proximity-fraction comparisons by treatment
-
 ---
 
 <!-- _class: light -->
@@ -286,141 +288,188 @@ regional_dataframe.ipynb
 
 **Objective:** Quantify the effect of Lecanemab treatment on Aβ plaque burden and size, modulated by ApoE genotype.
 
-**Subject-level metrics:**
-- Total plaque count, mean plaque volume, mean equivalent diameter
-- Fraction of plaques inside / near / far from vessels
-
 **Statistical framework:**
 
 | Test | Purpose |
 |---|---|
 | Two-way ANOVA | Treatment × Genotype interaction |
 | Tukey HSD post-hoc | Pairwise group comparisons |
+| Mann-Whitney U | Within-genotype PBS vs Lecanemab |
 | ECDF plots | Distribution-level comparisons |
-
-**Grouping factors:** `treatment` (PBS / Lecanemab) × `genotype` (ApoE3 / ApoE4)
-
----
-
-<!-- _class: light -->
-
-## Methods: Vessel Spatial Analysis
-
-**Objective:** Characterise how Aβ plaques distribute relative to the cerebral vasculature and whether this relationship is altered by treatment or genotype.
-
-<div class="columns">
-<div>
-
-**SDT analysis:**
-- ECDF of SDT values by treatment & genotype
-- Two-way ANOVA on mean SDT
-
-**Proximity fractions:**
-- Stacked bar plots per group
-- ANOVA on fractions
-
-</div>
-<div>
-
-**Spatial scatter plots:**
-- Plaques plotted in CCFv3 template space (3 views)
-- Coloured by proximity category
-
-**Vessel calibre (intravascular plaques):**
-- Minimum vessel diameter: `diam_plaque + 2 × |SDT|`
-- ECDF and subject-level summaries
-
-</div>
-</div>
 
 ---
 
 <!-- _class: section-break lead -->
 
-# Results
+# Results — Early Cohort
+## (Lecanemab 3–6 mo, imaging at 12 mo)
 
 ---
 
-## Regional Plaque Burden
+## [Early] Regional Plaque Burden
 
-![w:900px](fig_roi_top_density.png)
+![w:900px](fig_early_roi_top_density.png)
 
-> **Top brain regions** ranked by mean Aβ plaque density across all subjects.
-> Cortical and limbic areas show the highest accumulation.
-
----
-
-<!-- _class: light -->
-
-## Multi-Metric Regional Heatmap
-
-![w:900px](fig_roi_metric_heatmap.png)
-
-> Each metric is normalised [0, 1] per column. The heatmap reveals co-varying regions for plaque density, mean diameter, and intravascular fraction.
-
----
-
-## Atlas-Level Plaque Density — All Subjects
-
-![w:900px](fig_atlas_density_all.png)
-
-> Max-intensity projection of mean plaque density across all subjects painted onto the Allen Brain Atlas v3 volume (coronal · horizontal · sagittal).
-
----
-
-## Atlas-Level Density by Group
-
-![w:900px](fig_atlas_density_groups.png)
-
-> Plaque density heatmaps stratified by **treatment × genotype** groups reveal distinct regional patterns between PBS and Lecanemab cohorts.
-
----
-
-## Treatment Fold-Change Atlas
-
-![w:900px](fig_atlas_fold_change.png)
-
-> **Log₂ fold-change** (Lecanemab / PBS) mapped onto the Allen Brain Atlas volume. **Warm colours** = regions where Lecanemab reduced plaque burden; **cool colours** = increased burden.
+> **Top brain regions** ranked by mean Aβ plaque density — early cohort.
 
 ---
 
 <!-- _class: light -->
 
-## Treatment Effects — Subject-Level Metrics
+## [Early] Multi-Metric Regional Heatmap
 
-![w:900px](fig_boxplots_treatment_genotype.png)
+![w:900px](fig_early_roi_metric_heatmap.png)
 
-> Subject-level summary metrics stratified by **treatment × genotype**. Lecanemab significantly reduces overall Aβ plaque burden, with an ApoE genotype-dependent effect.
+> Each metric is normalised [0, 1] per column — early cohort.
+
+---
+
+## [Early] Atlas-Level Plaque Density — All Subjects
+
+![w:900px](fig_early_atlas_density_all.png)
+
+> Max-intensity projection of mean plaque density — early cohort.
+
+---
+
+## [Early] Atlas-Level Density by Group
+
+![w:900px](fig_early_atlas_density_groups.png)
+
+> Plaque density heatmaps by treatment × genotype — early cohort.
+
+---
+
+## [Early] Treatment Fold-Change Atlas
+
+![w:900px](fig_early_atlas_fold_change.png)
+
+> Log₂ fold-change (Lecanemab / PBS) — early cohort.
 
 ---
 
 <!-- _class: light -->
 
-## Plaque Size Distribution
+## [Early] Treatment Effects — Subject-Level Metrics
 
-![w:900px](fig_size_distribution_by_genotype.png)
+![w:900px](fig_early_boxplots_treatment_genotype.png)
 
-> Histogram of per-plaque size distributions reveals that Lecanemab in ApoE3 mice more effectively clears smaller plaques than in ApoE4 mice. 
-
----
-
-## Treatment × Genotype Interaction
-
-![w:900px](fig_interaction_plots.png)
-
-> Interaction plots highlight that **ApoE3** mice show a greater absolute reduction in plaque burden following Lecanemab treatment compared to ApoE4 mice. 
+> Subject-level summary metrics by treatment × genotype — early cohort.
 
 ---
 
 <!-- _class: light -->
 
-## Plaque–Vessel Proximity Fractions
+## [Early] Plaque Size Distribution
 
-![w:900px](fig_proximity_fractions_stacked.png)
+![w:900px](fig_early_size_distribution_by_genotype.png)
 
-> Stacked bar charts of categorized plaque-vessel proximity
+> Histogram of per-plaque size distributions — early cohort.
 
+---
 
+## [Early] Treatment × Genotype Interaction
+
+![w:900px](fig_early_interaction_plots.png)
+
+> Interaction plots — early cohort.
+
+---
+
+<!-- _class: light -->
+
+## [Early] Plaque–Vessel Proximity Fractions
+
+![w:900px](fig_early_proximity_fractions_stacked.png)
+
+> Stacked bar charts of categorized plaque-vessel proximity — early cohort.
+
+---
+
+<!-- _class: section-break lead -->
+
+# Results — Late Cohort
+## (Lecanemab 12–15 mo, imaging at 15 mo)
+
+---
+
+## [Late] Regional Plaque Burden
+
+![w:900px](fig_late_roi_top_density.png)
+
+> **Top brain regions** ranked by mean Aβ plaque density — late cohort.
+
+---
+
+<!-- _class: light -->
+
+## [Late] Multi-Metric Regional Heatmap
+
+![w:900px](fig_late_roi_metric_heatmap.png)
+
+> Each metric is normalised [0, 1] per column — late cohort.
+
+---
+
+## [Late] Atlas-Level Plaque Density — All Subjects
+
+![w:900px](fig_late_atlas_density_all.png)
+
+> Max-intensity projection of mean plaque density — late cohort.
+
+---
+
+## [Late] Atlas-Level Density by Group
+
+![w:900px](fig_late_atlas_density_groups.png)
+
+> Plaque density heatmaps by treatment × genotype — late cohort.
+
+---
+
+## [Late] Treatment Fold-Change Atlas
+
+![w:900px](fig_late_atlas_fold_change.png)
+
+> Log₂ fold-change (Lecanemab / PBS) — late cohort.
+
+---
+
+<!-- _class: light -->
+
+## [Late] Treatment Effects — Subject-Level Metrics
+
+![w:900px](fig_late_boxplots_treatment_genotype.png)
+
+> Subject-level summary metrics by treatment × genotype — late cohort.
+
+---
+
+<!-- _class: light -->
+
+## [Late] Plaque Size Distribution
+
+![w:900px](fig_late_size_distribution_by_genotype.png)
+
+> Histogram of per-plaque size distributions — late cohort.
+
+---
+
+## [Late] Treatment × Genotype Interaction
+
+![w:900px](fig_late_interaction_plots.png)
+
+> Interaction plots — late cohort.
+
+---
+
+<!-- _class: light -->
+
+## [Late] Plaque–Vessel Proximity Fractions
+
+![w:900px](fig_late_proximity_fractions_stacked.png)
+
+> Stacked bar charts of categorized plaque-vessel proximity — late cohort.
 
 ---
 
