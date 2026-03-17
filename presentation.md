@@ -278,7 +278,9 @@ regional_dataframe.ipynb
 - **ROI ranking** — Top regions by mean plaque density across subjects
 - **Multi-metric heatmap** — Normalised [0, 1] comparison of density, diameter, and vessel-fraction across top ROIs
 - **Treatment fold-change** — Log₂(Lecanemab / PBS) per ROI
-- **Atlas heatmaps** — Max-intensity projections of density and fold-change painted onto the 3-D Allen Brain Atlas volume (3 orthogonal views)
+- **Atlas heatmaps** — Max-intensity projections of density, fold-change, mean diameter, and intravascular fraction painted onto the 3-D Allen Brain Atlas volume (3 orthogonal views)
+- **ROI density boxplot** — Per-subject density distributions across top regions
+- **ROI proximity fractions** — Fraction of plaques near/inside vessels per region
 
 ---
 
@@ -306,6 +308,12 @@ regional_dataframe.ipynb
 
 ---
 
+<!-- _class: section-break lead -->
+
+## [Early] Regional Analysis
+
+---
+
 ## [Early] Regional Plaque Burden
 
 ![w:900px](fig_early_roi_top_density.png)
@@ -316,11 +324,39 @@ regional_dataframe.ipynb
 
 <!-- _class: light -->
 
+## [Early] ROI Density Boxplot
+
+![w:900px](fig_early_roi_density_boxplot.png)
+
+> Per-subject plaque density distributions across top regions — early cohort.
+
+---
+
+<!-- _class: light -->
+
 ## [Early] Multi-Metric Regional Heatmap
 
 ![w:900px](fig_early_roi_metric_heatmap.png)
 
 > Each metric is normalised [0, 1] per column — early cohort.
+
+---
+
+## [Early] ROI Proximity Fractions
+
+![w:900px](fig_early_roi_proximity_fractions.png)
+
+> Fraction of plaques near/inside vessels per region — early cohort.
+
+---
+
+<!-- _class: light -->
+
+## [Early] ROI Treatment Fold-Change
+
+![w:900px](fig_early_roi_fold_change.png)
+
+> Log₂ fold-change (Lecanemab / PBS) per ROI — early cohort.
 
 ---
 
@@ -344,7 +380,29 @@ regional_dataframe.ipynb
 
 ![w:900px](fig_early_atlas_fold_change.png)
 
-> Log₂ fold-change (Lecanemab / PBS) — early cohort.
+> Log₂ fold-change (Lecanemab / PBS) painted onto atlas volume — early cohort.
+
+---
+
+## [Early] Atlas Mean Plaque Diameter
+
+![w:900px](fig_early_atlas_mean_diam.png)
+
+> Mean equivalent plaque diameter painted onto atlas volume — early cohort.
+
+---
+
+## [Early] Atlas Fraction Inside Vessel
+
+![w:900px](fig_early_atlas_frac_inside.png)
+
+> Fraction of intravascular plaques painted onto atlas volume — early cohort.
+
+---
+
+<!-- _class: section-break lead -->
+
+## [Early] Treatment Effect Analysis
 
 ---
 
@@ -360,11 +418,11 @@ regional_dataframe.ipynb
 
 <!-- _class: light -->
 
-## [Early] Plaque Size Distribution
+## [Early] Violin — Plaque Size by Treatment & Genotype
 
-![w:900px](fig_early_size_distribution_by_genotype.png)
+![w:900px](fig_early_violin_plaque_size.png)
 
-> Histogram of per-plaque size distributions — early cohort.
+> Per-plaque size distributions by treatment × genotype — early cohort.
 
 ---
 
@@ -372,17 +430,111 @@ regional_dataframe.ipynb
 
 ![w:900px](fig_early_interaction_plots.png)
 
-> Interaction plots — early cohort.
+> Mean ± SEM interaction plots for key metrics — early cohort.
+
+---
+
+## [Early] Plaque Count Stratified by Genotype
+
+![w:900px](fig_early_stratified_by_genotype.png)
+
+> Per-subject plaque counts stratified by genotype — early cohort.
 
 ---
 
 <!-- _class: light -->
 
-## [Early] Plaque–Vessel Proximity Fractions
+## [Early] ECDF — Plaque Size by Genotype
+
+![w:900px](fig_early_ecdf_size_by_genotype.png)
+
+> Empirical CDF of per-plaque size by genotype — early cohort.
+
+---
+
+<!-- _class: light -->
+
+## [Early] Plaque Size Distribution
+
+![w:900px](fig_early_size_distribution_by_genotype.png)
+
+> Histogram of per-plaque size distributions by genotype — early cohort.
+
+---
+
+<!-- _class: section-break lead -->
+
+## [Early] Vessel Spatial Analysis
+
+---
+
+## [Early] SDT ECDF — Distance to Vessel Wall
+
+![w:900px](fig_early_sdt_ecdf.png)
+
+> ECDF of signed distance transform (SDT) to nearest vessel — early cohort.
+
+---
+
+<!-- _class: light -->
+
+## [Early] Plaque–Vessel Proximity Fractions (Stacked)
 
 ![w:900px](fig_early_proximity_fractions_stacked.png)
 
-> Stacked bar charts of categorized plaque-vessel proximity — early cohort.
+> Stacked bar charts of categorized plaque–vessel proximity — early cohort.
+
+---
+
+## [Early] Plaque–Vessel Proximity Fractions
+
+![w:900px](fig_early_proximity_fractions.png)
+
+> Grouped bar charts of plaque–vessel proximity fractions — early cohort.
+
+---
+
+## [Early] Proximity × Treatment Interaction
+
+![w:900px](fig_early_proximity_interaction.png)
+
+> Interaction plots for proximity fractions by treatment × genotype — early cohort.
+
+---
+
+<!-- _class: light -->
+
+## [Early] Vessel Calibre ECDF
+
+![w:900px](fig_early_vessel_calibre_ecdf.png)
+
+> ECDF of estimated vessel calibre for intravascular plaques — early cohort.
+
+---
+
+<!-- _class: light -->
+
+## [Early] Vessel Calibre by Subject
+
+![w:900px](fig_early_vessel_calibre_subject.png)
+
+> Estimated vessel calibre per subject — early cohort.
+
+---
+
+## [Early] Vessel Diameter Bins
+
+![w:900px](fig_early_vessel_diam_bins.png)
+
+> Distribution of plaques across vessel diameter bins — early cohort.
+
+---
+
+## [Early] Spatial Vessel Proximity
+
+![w:900px](fig_early_spatial_vessel_proximity.png)
+
+> Spatial mapping of plaque–vessel proximity across the brain — early cohort.
 
 ---
 
@@ -390,6 +542,12 @@ regional_dataframe.ipynb
 
 # Results — Late Cohort
 ## (Lecanemab 12–15 mo, imaging at 15 mo)
+
+---
+
+<!-- _class: section-break lead -->
+
+## [Late] Regional Analysis
 
 ---
 
@@ -403,11 +561,39 @@ regional_dataframe.ipynb
 
 <!-- _class: light -->
 
+## [Late] ROI Density Boxplot
+
+![w:900px](fig_late_roi_density_boxplot.png)
+
+> Per-subject plaque density distributions across top regions — late cohort.
+
+---
+
+<!-- _class: light -->
+
 ## [Late] Multi-Metric Regional Heatmap
 
 ![w:900px](fig_late_roi_metric_heatmap.png)
 
 > Each metric is normalised [0, 1] per column — late cohort.
+
+---
+
+## [Late] ROI Proximity Fractions
+
+![w:900px](fig_late_roi_proximity_fractions.png)
+
+> Fraction of plaques near/inside vessels per region — late cohort.
+
+---
+
+<!-- _class: light -->
+
+## [Late] ROI Treatment Fold-Change
+
+![w:900px](fig_late_roi_fold_change.png)
+
+> Log₂ fold-change (Lecanemab / PBS) per ROI — late cohort.
 
 ---
 
@@ -431,7 +617,29 @@ regional_dataframe.ipynb
 
 ![w:900px](fig_late_atlas_fold_change.png)
 
-> Log₂ fold-change (Lecanemab / PBS) — late cohort.
+> Log₂ fold-change (Lecanemab / PBS) painted onto atlas volume — late cohort.
+
+---
+
+## [Late] Atlas Mean Plaque Diameter
+
+![w:900px](fig_late_atlas_mean_diam.png)
+
+> Mean equivalent plaque diameter painted onto atlas volume — late cohort.
+
+---
+
+## [Late] Atlas Fraction Inside Vessel
+
+![w:900px](fig_late_atlas_frac_inside.png)
+
+> Fraction of intravascular plaques painted onto atlas volume — late cohort.
+
+---
+
+<!-- _class: section-break lead -->
+
+## [Late] Treatment Effect Analysis
 
 ---
 
@@ -447,11 +655,11 @@ regional_dataframe.ipynb
 
 <!-- _class: light -->
 
-## [Late] Plaque Size Distribution
+## [Late] Violin — Plaque Size by Treatment & Genotype
 
-![w:900px](fig_late_size_distribution_by_genotype.png)
+![w:900px](fig_late_violin_plaque_size.png)
 
-> Histogram of per-plaque size distributions — late cohort.
+> Per-plaque size distributions by treatment × genotype — late cohort.
 
 ---
 
@@ -459,17 +667,111 @@ regional_dataframe.ipynb
 
 ![w:900px](fig_late_interaction_plots.png)
 
-> Interaction plots — late cohort.
+> Mean ± SEM interaction plots for key metrics — late cohort.
+
+---
+
+## [Late] Plaque Count Stratified by Genotype
+
+![w:900px](fig_late_stratified_by_genotype.png)
+
+> Per-subject plaque counts stratified by genotype — late cohort.
 
 ---
 
 <!-- _class: light -->
 
-## [Late] Plaque–Vessel Proximity Fractions
+## [Late] ECDF — Plaque Size by Genotype
+
+![w:900px](fig_late_ecdf_size_by_genotype.png)
+
+> Empirical CDF of per-plaque size by genotype — late cohort.
+
+---
+
+<!-- _class: light -->
+
+## [Late] Plaque Size Distribution
+
+![w:900px](fig_late_size_distribution_by_genotype.png)
+
+> Histogram of per-plaque size distributions by genotype — late cohort.
+
+---
+
+<!-- _class: section-break lead -->
+
+## [Late] Vessel Spatial Analysis
+
+---
+
+## [Late] SDT ECDF — Distance to Vessel Wall
+
+![w:900px](fig_late_sdt_ecdf.png)
+
+> ECDF of signed distance transform (SDT) to nearest vessel — late cohort.
+
+---
+
+<!-- _class: light -->
+
+## [Late] Plaque–Vessel Proximity Fractions (Stacked)
 
 ![w:900px](fig_late_proximity_fractions_stacked.png)
 
-> Stacked bar charts of categorized plaque-vessel proximity — late cohort.
+> Stacked bar charts of categorized plaque–vessel proximity — late cohort.
+
+---
+
+## [Late] Plaque–Vessel Proximity Fractions
+
+![w:900px](fig_late_proximity_fractions.png)
+
+> Grouped bar charts of plaque–vessel proximity fractions — late cohort.
+
+---
+
+## [Late] Proximity × Treatment Interaction
+
+![w:900px](fig_late_proximity_interaction.png)
+
+> Interaction plots for proximity fractions by treatment × genotype — late cohort.
+
+---
+
+<!-- _class: light -->
+
+## [Late] Vessel Calibre ECDF
+
+![w:900px](fig_late_vessel_calibre_ecdf.png)
+
+> ECDF of estimated vessel calibre for intravascular plaques — late cohort.
+
+---
+
+<!-- _class: light -->
+
+## [Late] Vessel Calibre by Subject
+
+![w:900px](fig_late_vessel_calibre_subject.png)
+
+> Estimated vessel calibre per subject — late cohort.
+
+---
+
+## [Late] Vessel Diameter Bins
+
+![w:900px](fig_late_vessel_diam_bins.png)
+
+> Distribution of plaques across vessel diameter bins — late cohort.
+
+---
+
+## [Late] Spatial Vessel Proximity
+
+![w:900px](fig_late_spatial_vessel_proximity.png)
+
+> Spatial mapping of plaque–vessel proximity across the brain — late cohort.
 
 ---
 
