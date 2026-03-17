@@ -1,17 +1,15 @@
 """Plaque–vessel spatial relationship analysis figures.
 
 Reads  : data_{cohort}.parquet
-Writes : fig_{cohort}_{fig}.png
-
-Figure types (passed via Snakemake wildcard `fig` or --fig CLI arg):
-  sdt_ecdf                    ECDF of signed distance transform
-  proximity_fractions_stacked stacked bar chart of proximity fractions
-  proximity_fractions         boxplots of subject-level proximity fractions
-  proximity_interaction       interaction plots for proximity fractions
-  vessel_calibre_ecdf         ECDF of estimated vessel diameter
-  vessel_calibre_subject      subject-level boxplots of vessel calibre
-  vessel_diam_bins            fractions by vessel diameter bin
-  spatial_vessel_proximity    2-D scatter coloured by vessel relation
+Writes (one file per figure):
+  fig_{cohort}_sdt_ecdf.png                    ECDF of signed distance transform
+  fig_{cohort}_proximity_fractions_stacked.png stacked bar chart of proximity fractions
+  fig_{cohort}_proximity_fractions.png         boxplots of subject-level proximity fractions
+  fig_{cohort}_proximity_interaction.png       interaction plots for proximity fractions
+  fig_{cohort}_vessel_calibre_ecdf.png         ECDF of estimated vessel diameter
+  fig_{cohort}_vessel_calibre_subject.png      subject-level boxplots of vessel calibre
+  fig_{cohort}_vessel_diam_bins.png            fractions by vessel diameter bin
+  fig_{cohort}_spatial_vessel_proximity.png    2-D scatter coloured by vessel relation
 """
 
 import warnings
@@ -30,22 +28,26 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 # ── Snakemake integration ────────────────────────────────────────────────────
 if "snakemake" in dir():
     input_parquet = str(snakemake.input.parquet)  # noqa: F821
-    output_fig = str(snakemake.output[0])  # noqa: F821
+    output_figs = dict(snakemake.output)  # noqa: F821
     cohort = snakemake.wildcards.cohort  # noqa: F821
-    fig_type = snakemake.wildcards.fig  # noqa: F821
 else:
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--parquet", required=True)
-    parser.add_argument("--output", required=True)
+    parser.add_argument("--output-dir", required=True)
     parser.add_argument("--cohort", required=True)
-    parser.add_argument("--fig", required=True)
     args = parser.parse_args()
     input_parquet = args.parquet
-    output_fig = args.output
     cohort = args.cohort
-    fig_type = args.fig
+    output_figs = {
+        fig: f"{args.output_dir}/fig_{cohort}_{fig}.png"
+        for fig in [
+            "sdt_ecdf", "proximity_fractions_stacked", "proximity_fractions",
+            "proximity_interaction", "vessel_calibre_ecdf", "vessel_calibre_subject",
+            "vessel_diam_bins", "spatial_vessel_proximity",
+        ]
+    }
 
 # ── Constants ────────────────────────────────────────────────────────────────
 sns.set_theme(style="whitegrid", font_scale=1.1)
@@ -184,307 +186,293 @@ df = classify_plaques(df)
 relation_categories = df["vessel_relation"].cat.categories.tolist()
 
 # ── Figure dispatch ───────────────────────────────────────────────────────────
-if fig_type == "sdt_ecdf":
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-    for ax, (hue, order, palette) in zip(
-        axes,
-        [
-            ("treatment", TREAT_ORDER, TREAT_PALETTE),
-            ("genotype", geno_present, geno_palette),
-        ],
-    ):
-        sns.ecdfplot(data=df, x="sdt_CD31_um", hue=hue,
-                     hue_order=order, palette=palette, ax=ax)
-        ax.set_xlabel("SDT to CD31 vessel (\u00b5m)")
-        ax.set_ylabel("Cumulative fraction")
-        ax.axvline(0, color="k", linewidth=0.8, linestyle="--")
-        ax.set_xlim(-100, 200)
-    axes[0].set_title("By treatment")
-    axes[1].set_title("By genotype")
-    fig.suptitle(
-        f"SDT distribution by treatment/genotype \u2014 {cohort}", fontsize=13
-    )
-    plt.tight_layout()
-    plt.savefig(output_fig, dpi=150, bbox_inches="tight")
-    plt.close(fig)
+fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+for ax, (hue, order, palette) in zip(
+    axes,
+    [
+        ("treatment", TREAT_ORDER, TREAT_PALETTE),
+        ("genotype", geno_present, geno_palette),
+    ],
+):
+    sns.ecdfplot(data=df, x="sdt_CD31_um", hue=hue,
+                 hue_order=order, palette=palette, ax=ax)
+    ax.set_xlabel("SDT to CD31 vessel (\u00b5m)")
+    ax.set_ylabel("Cumulative fraction")
+    ax.axvline(0, color="k", linewidth=0.8, linestyle="--")
+    ax.set_xlim(-100, 200)
+axes[0].set_title("By treatment")
+axes[1].set_title("By genotype")
+fig.suptitle(
+    f"SDT distribution by treatment/genotype \u2014 {cohort}", fontsize=13
+)
+plt.tight_layout()
+plt.savefig(output_figs["sdt_ecdf"], dpi=150, bbox_inches="tight")
+plt.close(fig)
 
-elif fig_type == "proximity_fractions_stacked":
-    prop_df = (
-        df.groupby(["treatment", "genotype", "vessel_relation"], observed=True)
+prop_df = (
+    df.groupby(["treatment", "genotype", "vessel_relation"], observed=True)
+    .size()
+    .rename("n")
+    .reset_index()
+)
+prop_df["total"] = prop_df.groupby(
+    ["treatment", "genotype"], observed=True
+)["n"].transform("sum")
+prop_df["fraction"] = prop_df["n"] / prop_df["total"]
+prop_df["group"] = (
+    prop_df["treatment"].astype(str) + " | " + prop_df["genotype"].astype(str)
+)
+
+groups = prop_df["group"].unique().tolist()
+bottoms = np.zeros(len(groups))
+fig, ax = plt.subplots(figsize=(9, 5))
+for cat in relation_categories:
+    vals = [
+        prop_df.loc[
+            (prop_df["group"] == g) & (prop_df["vessel_relation"] == cat),
+            "fraction",
+        ].values[0]
+        if len(
+            prop_df.loc[
+                (prop_df["group"] == g) & (prop_df["vessel_relation"] == cat)
+            ]
+        ) > 0
+        else 0.0
+        for g in groups
+    ]
+    color = PROX_PALETTE.get(cat, "grey")
+    ax.bar(groups, vals, bottom=bottoms, label=cat, color=color, width=0.6)
+    bottoms += np.array(vals)
+ax.set_ylabel("Fraction of plaques")
+ax.set_xlabel("")
+ax.set_xticklabels(groups, rotation=20, ha="right")
+ax.legend(
+    title="Vessel relation",
+    bbox_to_anchor=(1.01, 1),
+    loc="upper left",
+    fontsize=8,
+)
+ax.set_title(f"Plaque\u2013vessel proximity fractions \u2014 {cohort}")
+plt.tight_layout()
+plt.savefig(output_figs["proximity_fractions_stacked"], dpi=150, bbox_inches="tight")
+plt.close(fig)
+
+subj_prox = subject_proximity_fractions(df)
+subj_prox["genotype"] = pd.Categorical(
+    subj_prox["genotype"], categories=geno_present, ordered=True
+)
+prox_frac_cols = [c for c in subj_prox.columns if c.startswith("frac_")]
+
+fig, axes = plt.subplots(
+    1, len(prox_frac_cols), figsize=(5 * len(prox_frac_cols), 5)
+)
+if len(prox_frac_cols) == 1:
+    axes = [axes]
+for ax, col in zip(axes, prox_frac_cols):
+    label = col.replace("frac_", "").replace("_", " ")
+    if n_geno > 1:
+        boxstrip(ax, subj_prox, x="treatment", y=col, hue="genotype",
+                 order=TREAT_ORDER, hue_order=geno_present, palette=geno_palette,
+                 ylabel=f"Fraction {label}")
+    else:
+        sns.boxplot(data=subj_prox, x="treatment", y=col, order=TREAT_ORDER,
+                    palette=TREAT_PALETTE, fill=False, linewidth=1.2, fliersize=0,
+                    ax=ax)
+        sns.stripplot(data=subj_prox, x="treatment", y=col, order=TREAT_ORDER,
+                      palette=TREAT_PALETTE, alpha=0.7, size=6, jitter=True, ax=ax)
+        ax.set_ylabel(f"Fraction {label}")
+    ax.set_xlabel("")
+    ax.set_title(label)
+fig.suptitle(
+    f"Subject-level proximity fractions \u2014 {cohort}", fontsize=13
+)
+plt.tight_layout()
+plt.savefig(output_figs["proximity_fractions"], dpi=150, bbox_inches="tight")
+plt.close(fig)
+
+subj_prox_int = subject_proximity_fractions(df)
+subj_prox_int["genotype"] = pd.Categorical(
+    subj_prox_int["genotype"], categories=geno_present, ordered=True
+)
+prox_int_cols = [c for c in subj_prox_int.columns if c.startswith("frac_")]
+
+fig, axes = plt.subplots(
+    1, len(prox_int_cols), figsize=(5 * len(prox_int_cols), 5)
+)
+if len(prox_int_cols) == 1:
+    axes = [axes]
+for ax, col in zip(axes, prox_int_cols):
+    label = col.replace("frac_", "").replace("_", " ")
+    agg = (
+        subj_prox_int.groupby(["treatment", "genotype"], observed=True)[col]
+        .agg(["mean", "sem"])
+        .reset_index()
+    )
+    for geno, grp in agg.groupby("genotype", observed=True):
+        color = GENO_PALETTE[geno]
+        ax.plot(grp["treatment"].astype(str), grp["mean"],
+                marker="o", linewidth=2, color=color, label=geno)
+        ax.errorbar(grp["treatment"].astype(str), grp["mean"],
+                    yerr=grp["sem"], fmt="none", color=color, capsize=4)
+    ax.set_ylabel(f"Fraction {label}")
+    ax.set_xlabel("Treatment")
+    ax.legend(title="Genotype", fontsize=9)
+    ax.set_title(label)
+fig.suptitle(
+    f"Proximity interaction plots \u2014 {cohort}", fontsize=13
+)
+plt.tight_layout()
+plt.savefig(output_figs["proximity_interaction"], dpi=150, bbox_inches="tight")
+plt.close(fig)
+
+df_inside = df.loc[df["sdt_CD31_um"] < 0].copy()
+fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+for ax, (hue, order, palette) in zip(
+    axes,
+    [
+        ("treatment", TREAT_ORDER, TREAT_PALETTE),
+        ("genotype", geno_present, geno_palette),
+    ],
+):
+    sns.ecdfplot(data=df_inside, x="min_vessel_diam_um",
+                 hue=hue, hue_order=order, palette=palette, ax=ax)
+    ax.set_xlabel("Estimated min vessel diameter (\u00b5m)")
+    ax.set_ylabel("Cumulative fraction")
+    ax.set_xlim(0, 100)
+axes[0].set_title("By treatment")
+axes[1].set_title("By genotype")
+fig.suptitle(
+    f"Estimated vessel diameter (intravascular plaques) \u2014 {cohort}",
+    fontsize=13,
+)
+plt.tight_layout()
+plt.savefig(output_figs["vessel_calibre_ecdf"], dpi=150, bbox_inches="tight")
+plt.close(fig)
+
+subj_calibre = (
+    df_inside.groupby(
+        ["subject", "treatment", "genotype", "sex"], observed=True
+    )
+    .agg(
+        n_intravascular=("min_vessel_diam_um", "size"),
+        mean_min_diam_um=("min_vessel_diam_um", "mean"),
+        median_min_diam_um=("min_vessel_diam_um", "median"),
+        mean_sdt_inside_um=("sdt_CD31_um", "mean"),
+        median_sdt_inside_um=("sdt_CD31_um", "median"),
+    )
+    .reset_index()
+)
+subj_calibre["genotype"] = pd.Categorical(
+    subj_calibre["genotype"], categories=geno_present, ordered=True
+)
+calibre_metrics = [
+    ("mean_min_diam_um", "Mean estimated min vessel diam. (\u00b5m)"),
+    ("median_sdt_inside_um", "Median SDT inside vessel (\u00b5m)"),
+]
+fig, axes = plt.subplots(1, 2, figsize=(11, 5))
+for ax, (col, label) in zip(axes, calibre_metrics):
+    if n_geno > 1:
+        boxstrip(ax, subj_calibre, x="treatment", y=col, hue="genotype",
+                 order=TREAT_ORDER, hue_order=geno_present, palette=geno_palette,
+                 ylabel=label)
+    else:
+        sns.boxplot(data=subj_calibre, x="treatment", y=col, order=TREAT_ORDER,
+                    palette=TREAT_PALETTE, fill=False, linewidth=1.2, fliersize=0,
+                    ax=ax)
+        sns.stripplot(data=subj_calibre, x="treatment", y=col, order=TREAT_ORDER,
+                      palette=TREAT_PALETTE, alpha=0.75, size=7, jitter=True, ax=ax)
+        ax.set_ylabel(label)
+    ax.set_xlabel("")
+fig.suptitle(
+    f"Subject-level vessel-calibre estimates \u2014 {cohort}", fontsize=13
+)
+plt.tight_layout()
+plt.savefig(output_figs["vessel_calibre_subject"], dpi=150, bbox_inches="tight")
+plt.close(fig)
+
+def subject_vessel_diam_fractions(
+    plaque_df,
+    group_cols=("subject", "genotype", "treatment", "sex"),
+):
+    inside = plaque_df.loc[plaque_df["sdt_CD31_um"] < 0]
+    counts = (
+        inside.groupby(list(group_cols) + ["vessel_diam_bin"], observed=True)
         .size()
         .rename("n")
         .reset_index()
     )
-    prop_df["total"] = prop_df.groupby(
-        ["treatment", "genotype"], observed=True
-    )["n"].transform("sum")
-    prop_df["fraction"] = prop_df["n"] / prop_df["total"]
-    prop_df["group"] = (
-        prop_df["treatment"].astype(str) + " | " + prop_df["genotype"].astype(str)
-    )
-
-    groups = prop_df["group"].unique().tolist()
-    bottoms = np.zeros(len(groups))
-    fig, ax = plt.subplots(figsize=(9, 5))
-    for cat in relation_categories:
-        vals = [
-            prop_df.loc[
-                (prop_df["group"] == g) & (prop_df["vessel_relation"] == cat),
-                "fraction",
-            ].values[0]
-            if len(
-                prop_df.loc[
-                    (prop_df["group"] == g) & (prop_df["vessel_relation"] == cat)
-                ]
-            ) > 0
-            else 0.0
-            for g in groups
-        ]
-        color = PROX_PALETTE.get(cat, "grey")
-        ax.bar(groups, vals, bottom=bottoms, label=cat, color=color, width=0.6)
-        bottoms += np.array(vals)
-    ax.set_ylabel("Fraction of plaques")
-    ax.set_xlabel("")
-    ax.set_xticklabels(groups, rotation=20, ha="right")
-    ax.legend(
-        title="Vessel relation",
-        bbox_to_anchor=(1.01, 1),
-        loc="upper left",
-        fontsize=8,
-    )
-    ax.set_title(f"Plaque\u2013vessel proximity fractions \u2014 {cohort}")
-    plt.tight_layout()
-    plt.savefig(output_fig, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-
-elif fig_type == "proximity_fractions":
-    subj_prox = subject_proximity_fractions(df)
-    subj_prox["genotype"] = pd.Categorical(
-        subj_prox["genotype"], categories=geno_present, ordered=True
-    )
-    prox_frac_cols = [c for c in subj_prox.columns if c.startswith("frac_")]
-
-    fig, axes = plt.subplots(
-        1, len(prox_frac_cols), figsize=(5 * len(prox_frac_cols), 5)
-    )
-    if len(prox_frac_cols) == 1:
-        axes = [axes]
-    for ax, col in zip(axes, prox_frac_cols):
-        label = col.replace("frac_", "").replace("_", " ")
-        if n_geno > 1:
-            boxstrip(ax, subj_prox, x="treatment", y=col, hue="genotype",
-                     order=TREAT_ORDER, hue_order=geno_present, palette=geno_palette,
-                     ylabel=f"Fraction {label}")
-        else:
-            sns.boxplot(data=subj_prox, x="treatment", y=col, order=TREAT_ORDER,
-                        palette=TREAT_PALETTE, fill=False, linewidth=1.2, fliersize=0,
-                        ax=ax)
-            sns.stripplot(data=subj_prox, x="treatment", y=col, order=TREAT_ORDER,
-                          palette=TREAT_PALETTE, alpha=0.7, size=6, jitter=True, ax=ax)
-            ax.set_ylabel(f"Fraction {label}")
-        ax.set_xlabel("")
-        ax.set_title(label)
-    fig.suptitle(
-        f"Subject-level proximity fractions \u2014 {cohort}", fontsize=13
-    )
-    plt.tight_layout()
-    plt.savefig(output_fig, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-
-elif fig_type == "proximity_interaction":
-    subj_prox = subject_proximity_fractions(df)
-    subj_prox["genotype"] = pd.Categorical(
-        subj_prox["genotype"], categories=geno_present, ordered=True
-    )
-    prox_int_cols = [c for c in subj_prox.columns if c.startswith("frac_")]
-
-    fig, axes = plt.subplots(
-        1, len(prox_int_cols), figsize=(5 * len(prox_int_cols), 5)
-    )
-    if len(prox_int_cols) == 1:
-        axes = [axes]
-    for ax, col in zip(axes, prox_int_cols):
-        label = col.replace("frac_", "").replace("_", " ")
-        agg = (
-            subj_prox.groupby(["treatment", "genotype"], observed=True)[col]
-            .agg(["mean", "sem"])
-            .reset_index()
-        )
-        for geno, grp in agg.groupby("genotype", observed=True):
-            color = GENO_PALETTE[geno]
-            ax.plot(grp["treatment"].astype(str), grp["mean"],
-                    marker="o", linewidth=2, color=color, label=geno)
-            ax.errorbar(grp["treatment"].astype(str), grp["mean"],
-                        yerr=grp["sem"], fmt="none", color=color, capsize=4)
-        ax.set_ylabel(f"Fraction {label}")
-        ax.set_xlabel("Treatment")
-        ax.legend(title="Genotype", fontsize=9)
-        ax.set_title(label)
-    fig.suptitle(
-        f"Proximity interaction plots \u2014 {cohort}", fontsize=13
-    )
-    plt.tight_layout()
-    plt.savefig(output_fig, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-
-elif fig_type == "vessel_calibre_ecdf":
-    df_inside = df.loc[df["sdt_CD31_um"] < 0].copy()
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-    for ax, (hue, order, palette) in zip(
-        axes,
-        [
-            ("treatment", TREAT_ORDER, TREAT_PALETTE),
-            ("genotype", geno_present, geno_palette),
-        ],
-    ):
-        sns.ecdfplot(data=df_inside, x="min_vessel_diam_um",
-                     hue=hue, hue_order=order, palette=palette, ax=ax)
-        ax.set_xlabel("Estimated min vessel diameter (\u00b5m)")
-        ax.set_ylabel("Cumulative fraction")
-        ax.set_xlim(0, 100)
-    axes[0].set_title("By treatment")
-    axes[1].set_title("By genotype")
-    fig.suptitle(
-        f"Estimated vessel diameter (intravascular plaques) \u2014 {cohort}",
-        fontsize=13,
-    )
-    plt.tight_layout()
-    plt.savefig(output_fig, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-
-elif fig_type == "vessel_calibre_subject":
-    df_inside = df.loc[df["sdt_CD31_um"] < 0].copy()
-    subj_calibre = (
-        df_inside.groupby(
-            ["subject", "treatment", "genotype", "sex"], observed=True
-        )
-        .agg(
-            n_intravascular=("min_vessel_diam_um", "size"),
-            mean_min_diam_um=("min_vessel_diam_um", "mean"),
-            median_min_diam_um=("min_vessel_diam_um", "median"),
-            mean_sdt_inside_um=("sdt_CD31_um", "mean"),
-            median_sdt_inside_um=("sdt_CD31_um", "median"),
-        )
+    totals = (
+        inside.groupby(list(group_cols), observed=True)
+        .size()
+        .rename("n_total")
         .reset_index()
     )
-    subj_calibre["genotype"] = pd.Categorical(
-        subj_calibre["genotype"], categories=geno_present, ordered=True
-    )
-    calibre_metrics = [
-        ("mean_min_diam_um", "Mean estimated min vessel diam. (\u00b5m)"),
-        ("median_sdt_inside_um", "Median SDT inside vessel (\u00b5m)"),
-    ]
-    fig, axes = plt.subplots(1, 2, figsize=(11, 5))
-    for ax, (col, label) in zip(axes, calibre_metrics):
-        if n_geno > 1:
-            boxstrip(ax, subj_calibre, x="treatment", y=col, hue="genotype",
-                     order=TREAT_ORDER, hue_order=geno_present, palette=geno_palette,
-                     ylabel=label)
-        else:
-            sns.boxplot(data=subj_calibre, x="treatment", y=col, order=TREAT_ORDER,
-                        palette=TREAT_PALETTE, fill=False, linewidth=1.2, fliersize=0,
-                        ax=ax)
-            sns.stripplot(data=subj_calibre, x="treatment", y=col, order=TREAT_ORDER,
-                          palette=TREAT_PALETTE, alpha=0.75, size=7, jitter=True, ax=ax)
-            ax.set_ylabel(label)
-        ax.set_xlabel("")
-    fig.suptitle(
-        f"Subject-level vessel-calibre estimates \u2014 {cohort}", fontsize=13
-    )
-    plt.tight_layout()
-    plt.savefig(output_fig, dpi=150, bbox_inches="tight")
-    plt.close(fig)
+    out = counts.merge(totals, on=list(group_cols))
+    out["fraction"] = out["n"] / out["n_total"]
+    return out
 
-elif fig_type == "vessel_diam_bins":
-    df_inside = df.loc[df["sdt_CD31_um"] < 0].copy()
+subj_diam = subject_vessel_diam_fractions(df)
+subj_diam["genotype"] = pd.Categorical(
+    subj_diam["genotype"], categories=geno_present, ordered=True
+)
+diam_bins = df["vessel_diam_bin"].cat.categories.tolist()
+fig, axes = plt.subplots(1, len(diam_bins), figsize=(5 * len(diam_bins), 5))
+if len(diam_bins) == 1:
+    axes = [axes]
+for ax, bin_label in zip(axes, diam_bins):
+    bin_data = subj_diam.loc[subj_diam["vessel_diam_bin"] == bin_label]
+    if n_geno > 1:
+        boxstrip(ax, bin_data, x="treatment", y="fraction", hue="genotype",
+                 order=TREAT_ORDER, hue_order=geno_present, palette=geno_palette,
+                 ylabel="Fraction of intravascular plaques")
+    else:
+        sns.boxplot(data=bin_data, x="treatment", y="fraction", order=TREAT_ORDER,
+                    palette=TREAT_PALETTE, fill=False, linewidth=1.2, fliersize=0,
+                    ax=ax)
+        sns.stripplot(data=bin_data, x="treatment", y="fraction", order=TREAT_ORDER,
+                      palette=TREAT_PALETTE, alpha=0.75, size=7, jitter=True, ax=ax)
+        ax.set_ylabel("Fraction of intravascular plaques")
+    ax.set_title(f"Vessel diam. {bin_label}", fontsize=10)
+    ax.set_xlabel("")
+fig.suptitle(
+    f"Intravascular plaques by vessel diameter bin \u2014 {cohort}", fontsize=13
+)
+plt.tight_layout()
+plt.savefig(output_figs["vessel_diam_bins"], dpi=150, bbox_inches="tight")
+plt.close(fig)
 
-    def subject_vessel_diam_fractions(
-        plaque_df,
-        group_cols=("subject", "genotype", "treatment", "sex"),
-    ):
-        inside = plaque_df.loc[plaque_df["sdt_CD31_um"] < 0]
-        counts = (
-            inside.groupby(list(group_cols) + ["vessel_diam_bin"], observed=True)
-            .size()
-            .rename("n")
-            .reset_index()
-        )
-        totals = (
-            inside.groupby(list(group_cols), observed=True)
-            .size()
-            .rename("n_total")
-            .reset_index()
-        )
-        out = counts.merge(totals, on=list(group_cols))
-        out["fraction"] = out["n"] / out["n_total"]
-        return out
+n_sample = 30_000
+sample = df.sample(min(n_sample, len(df)), random_state=42)
 
-    subj_diam = subject_vessel_diam_fractions(df)
-    subj_diam["genotype"] = pd.Categorical(
-        subj_diam["genotype"], categories=geno_present, ordered=True
-    )
-    diam_bins = df["vessel_diam_bin"].cat.categories.tolist()
-    fig, axes = plt.subplots(1, len(diam_bins), figsize=(5 * len(diam_bins), 5))
-    if len(diam_bins) == 1:
-        axes = [axes]
-    for ax, bin_label in zip(axes, diam_bins):
-        bin_data = subj_diam.loc[subj_diam["vessel_diam_bin"] == bin_label]
-        if n_geno > 1:
-            boxstrip(ax, bin_data, x="treatment", y="fraction", hue="genotype",
-                     order=TREAT_ORDER, hue_order=geno_present, palette=geno_palette,
-                     ylabel="Fraction of intravascular plaques")
-        else:
-            sns.boxplot(data=bin_data, x="treatment", y="fraction", order=TREAT_ORDER,
-                        palette=TREAT_PALETTE, fill=False, linewidth=1.2, fliersize=0,
-                        ax=ax)
-            sns.stripplot(data=bin_data, x="treatment", y="fraction", order=TREAT_ORDER,
-                          palette=TREAT_PALETTE, alpha=0.75, size=7, jitter=True, ax=ax)
-            ax.set_ylabel("Fraction of intravascular plaques")
-        ax.set_title(f"Vessel diam. {bin_label}", fontsize=10)
-        ax.set_xlabel("")
-    fig.suptitle(
-        f"Intravascular plaques by vessel diameter bin \u2014 {cohort}", fontsize=13
-    )
-    plt.tight_layout()
-    plt.savefig(output_fig, dpi=150, bbox_inches="tight")
-    plt.close(fig)
+fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+sns.scatterplot(
+    data=sample, x="template_x", y="template_y",
+    hue="vessel_relation", hue_order=relation_categories,
+    palette=PROX_PALETTE, alpha=0.3, s=4, ax=axes[0],
+)
+axes[0].set_aspect("equal")
+axes[0].set_title("XY projection")
+axes[0].get_legend().remove()
 
-elif fig_type == "spatial_vessel_proximity":
-    n_sample = 30_000
-    sample = df.sample(min(n_sample, len(df)), random_state=42)
-
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-    sns.scatterplot(
-        data=sample, x="template_x", y="template_y",
-        hue="vessel_relation", hue_order=relation_categories,
-        palette=PROX_PALETTE, alpha=0.3, s=4, ax=axes[0],
-    )
-    axes[0].set_aspect("equal")
-    axes[0].set_title("XY projection")
-    axes[0].get_legend().remove()
-
-    sns.scatterplot(
-        data=sample, x="template_x", y="template_z",
-        hue="vessel_relation", hue_order=relation_categories,
-        palette=PROX_PALETTE, alpha=0.3, s=4, ax=axes[1],
-    )
-    axes[1].set_aspect("equal")
-    axes[1].set_title("XZ projection")
-    axes[1].legend(
-        title="Vessel relation",
-        bbox_to_anchor=(1.01, 1),
-        loc="upper left",
-        fontsize=8,
-        markerscale=3,
-    )
-    fig.suptitle(
-        f"2-D spatial distribution coloured by vessel proximity \u2014 {cohort}"
-        f"  (n={n_sample:,} sample)",
-        fontsize=13,
-    )
-    plt.tight_layout()
-    plt.savefig(output_fig, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-
-else:
-    raise ValueError(f"Unknown fig_type: '{fig_type}'")
+sns.scatterplot(
+    data=sample, x="template_x", y="template_z",
+    hue="vessel_relation", hue_order=relation_categories,
+    palette=PROX_PALETTE, alpha=0.3, s=4, ax=axes[1],
+)
+axes[1].set_aspect("equal")
+axes[1].set_title("XZ projection")
+axes[1].legend(
+    title="Vessel relation",
+    bbox_to_anchor=(1.01, 1),
+    loc="upper left",
+    fontsize=8,
+    markerscale=3,
+)
+fig.suptitle(
+    f"2-D spatial distribution coloured by vessel proximity \u2014 {cohort}"
+    f"  (n={n_sample:,} sample)",
+    fontsize=13,
+)
+plt.tight_layout()
+plt.savefig(output_figs["spatial_vessel_proximity"], dpi=150, bbox_inches="tight")
+plt.close(fig)

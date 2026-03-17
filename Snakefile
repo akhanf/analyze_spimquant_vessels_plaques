@@ -100,11 +100,18 @@ rule regional_analysis:
         roi_parquet="roi_data_{cohort}.parquet",
         atlas="tpl-ABAv3_seg-all_dseg.nii.gz",
     output:
-        "fig_{cohort}_{fig}.png",
+        roi_top_density="fig_{cohort}_roi_top_density.png",
+        roi_density_boxplot="fig_{cohort}_roi_density_boxplot.png",
+        roi_metric_heatmap="fig_{cohort}_roi_metric_heatmap.png",
+        roi_proximity_fractions="fig_{cohort}_roi_proximity_fractions.png",
+        roi_fold_change="fig_{cohort}_roi_fold_change.png",
+        atlas_density_all="fig_{cohort}_atlas_density_all.png",
+        atlas_density_groups="fig_{cohort}_atlas_density_groups.png",
+        atlas_fold_change="fig_{cohort}_atlas_fold_change.png",
+        atlas_mean_diam="fig_{cohort}_atlas_mean_diam.png",
+        atlas_frac_inside="fig_{cohort}_atlas_frac_inside.png",
     log:
-        "logs/regional_analysis_{cohort}_{fig}.log",
-    wildcard_constraints:
-        fig="|".join(REGIONAL_FIGS),
+        "logs/regional_analysis_{cohort}.log",
     script:
         "scripts/regional_analysis.py"
 
@@ -114,11 +121,14 @@ rule treatment_analysis:
     input:
         parquet="data_{cohort}.parquet",
     output:
-        "fig_{cohort}_{fig}.png",
+        boxplots_treatment_genotype="fig_{cohort}_boxplots_treatment_genotype.png",
+        violin_plaque_size="fig_{cohort}_violin_plaque_size.png",
+        interaction_plots="fig_{cohort}_interaction_plots.png",
+        stratified_by_genotype="fig_{cohort}_stratified_by_genotype.png",
+        ecdf_size_by_genotype="fig_{cohort}_ecdf_size_by_genotype.png",
+        size_distribution_by_genotype="fig_{cohort}_size_distribution_by_genotype.png",
     log:
-        "logs/treatment_analysis_{cohort}_{fig}.log",
-    wildcard_constraints:
-        fig="|".join(TREATMENT_FIGS),
+        "logs/treatment_analysis_{cohort}.log",
     script:
         "scripts/treatment_effect_analysis.py"
 
@@ -128,10 +138,15 @@ rule vessel_analysis:
     input:
         parquet="data_{cohort}.parquet",
     output:
-        "fig_{cohort}_{fig}.png",
+        sdt_ecdf="fig_{cohort}_sdt_ecdf.png",
+        proximity_fractions_stacked="fig_{cohort}_proximity_fractions_stacked.png",
+        proximity_fractions="fig_{cohort}_proximity_fractions.png",
+        proximity_interaction="fig_{cohort}_proximity_interaction.png",
+        vessel_calibre_ecdf="fig_{cohort}_vessel_calibre_ecdf.png",
+        vessel_calibre_subject="fig_{cohort}_vessel_calibre_subject.png",
+        vessel_diam_bins="fig_{cohort}_vessel_diam_bins.png",
+        spatial_vessel_proximity="fig_{cohort}_spatial_vessel_proximity.png",
     log:
-        "logs/vessel_analysis_{cohort}_{fig}.log",
-    wildcard_constraints:
-        fig="|".join(VESSEL_FIGS),
+        "logs/vessel_analysis_{cohort}.log",
     script:
         "scripts/vessel_spatial_analysis.py"
