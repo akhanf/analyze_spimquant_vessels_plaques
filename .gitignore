@@ -4,5 +4,13 @@
 .pixi
 *.egg-info
 
-# generated intermediate data files
+# generated data files (produced locally by import_data.ipynb)
+data.parquet
+data_early.parquet
+data_late.parquet
+
+# generated intermediate data files (produced by regional_dataframe.ipynb)
 roi_data.parquet
+roi_data_early.parquet
+roi_data_late.parquet
+*.png
