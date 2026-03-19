@@ -13,25 +13,10 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-# ── Snakemake integration ────────────────────────────────────────────────────
-if "snakemake" in dir():
-    participant_tsv = snakemake.params.participant_tsv  # noqa: F821
-    spimquant_dir = snakemake.params.spimquant_dir  # noqa: F821
-    output_parquet = str(snakemake.output[0])  # noqa: F821
-    cohort = snakemake.wildcards.cohort  # noqa: F821
-else:
-    import argparse
-
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--participant-tsv", required=True)
-    parser.add_argument("--spimquant-dir", required=True)
-    parser.add_argument("--output", required=True)
-    parser.add_argument("--cohort", required=True)
-    args = parser.parse_args()
-    participant_tsv = args.participant_tsv
-    spimquant_dir = args.spimquant_dir
-    output_parquet = args.output
-    cohort = args.cohort
+participant_tsv = snakemake.params.participant_tsv  # noqa: F821
+spimquant_dir = snakemake.params.spimquant_dir  # noqa: F821
+output_parquet = str(snakemake.output[0])  # noqa: F821
+cohort = snakemake.wildcards.cohort  # noqa: F821
 
 # ── Constants ────────────────────────────────────────────────────────────────
 VOXEL_VOL_UM3 = 1.6 * 1.6 * 2.75  # µm³ per voxel

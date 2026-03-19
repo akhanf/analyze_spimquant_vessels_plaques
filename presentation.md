@@ -179,7 +179,7 @@ A plaque's `sdt_CD31` value encodes its distance to the nearest vessel wall:
 - Light-sheet imaging at **15 months**
 
 > Each cohort is analysed independently; figures are saved as  
-> `fig_early_*.png` and `fig_late_*.png`
+> `figures/fig_early_*.png` and `fig_late_*.png`
 
 </div>
 <div>
@@ -225,13 +225,13 @@ regional_dataframe.ipynb
    │  → roi_data_early.parquet  +  roi_data_late.parquet
    ├──▶ regional_analysis.ipynb
    │       Atlas heatmaps · ROI rankings · Fold-change maps
-   │       → fig_{early|late}_atlas_*.png  etc.
+   │       → figures/fig_{early|late}_atlas_*.png  etc.
    ├──▶ treatment_effect_analysis.ipynb
    │       Two-way ANOVA · Post-hoc comparisons · ECDFs
-   │       → fig_{early|late}_boxplots_*.png  etc.
+   │       → figures/fig_{early|late}_boxplots_*.png  etc.
    └──▶ vessel_spatial_analysis.ipynb
            SDT distributions · Proximity fractions · Vessel calibre
-           → fig_{early|late}_sdt_ecdf.png  etc.
+           → figures/fig_{early|late}_sdt_ecdf.png  etc.
 ```
 
 > **Reproducibility:** All notebooks executed via `pixi run run_notebooks`  
@@ -316,7 +316,7 @@ regional_dataframe.ipynb
 
 ## [Early] Regional Plaque Burden
 
-![w:900px](fig_early_roi_top_density.png)
+![w:900px](figures/fig_early_roi_top_density.png)
 
 > **Top brain regions** ranked by mean Aβ plaque density — early cohort.
 
@@ -326,7 +326,7 @@ regional_dataframe.ipynb
 
 ## [Early] ROI Density Boxplot
 
-![w:900px](fig_early_roi_density_boxplot.png)
+![w:900px](figures/fig_early_roi_density_boxplot.png)
 
 > Per-subject plaque density distributions across top regions — early cohort.
 
@@ -336,7 +336,7 @@ regional_dataframe.ipynb
 
 ## [Early] Multi-Metric Regional Heatmap
 
-![w:900px](fig_early_roi_metric_heatmap.png)
+![w:900px](figures/fig_early_roi_metric_heatmap.png)
 
 > Each metric is normalised [0, 1] per column — early cohort.
 
@@ -344,7 +344,7 @@ regional_dataframe.ipynb
 
 ## [Early] ROI Proximity Fractions
 
-![w:900px](fig_early_roi_proximity_fractions.png)
+![w:900px](figures/fig_early_roi_proximity_fractions.png)
 
 > Fraction of plaques near/inside vessels per region — early cohort.
 
@@ -354,7 +354,7 @@ regional_dataframe.ipynb
 
 ## [Early] ROI Treatment Fold-Change
 
-![w:900px](fig_early_roi_fold_change.png)
+![w:900px](figures/fig_early_roi_fold_change.png)
 
 > Log₂ fold-change (Lecanemab / PBS) per ROI — early cohort.
 
@@ -362,7 +362,7 @@ regional_dataframe.ipynb
 
 ## [Early] Atlas-Level Plaque Density — All Subjects
 
-![w:900px](fig_early_atlas_density_all.png)
+![w:900px](figures/fig_early_atlas_density_all.png)
 
 > Max-intensity projection of mean plaque density — early cohort.
 
@@ -370,7 +370,7 @@ regional_dataframe.ipynb
 
 ## [Early] Atlas-Level Density by Group
 
-![w:900px](fig_early_atlas_density_groups.png)
+![w:900px](figures/fig_early_atlas_density_groups.png)
 
 > Plaque density heatmaps by treatment × genotype — early cohort.
 
@@ -378,7 +378,7 @@ regional_dataframe.ipynb
 
 ## [Early] Treatment Fold-Change Atlas
 
-![w:900px](fig_early_atlas_fold_change.png)
+![w:900px](figures/fig_early_atlas_fold_change.png)
 
 > Log₂ fold-change (Lecanemab / PBS) painted onto atlas volume — early cohort.
 
@@ -386,7 +386,7 @@ regional_dataframe.ipynb
 
 ## [Early] Atlas Mean Plaque Diameter
 
-![w:900px](fig_early_atlas_mean_diam.png)
+![w:900px](figures/fig_early_atlas_mean_diam.png)
 
 > Mean equivalent plaque diameter painted onto atlas volume — early cohort.
 
@@ -394,7 +394,7 @@ regional_dataframe.ipynb
 
 ## [Early] Atlas Fraction Inside Vessel
 
-![w:900px](fig_early_atlas_frac_inside.png)
+![w:900px](figures/fig_early_atlas_frac_inside.png)
 
 > Fraction of intravascular plaques painted onto atlas volume — early cohort.
 
@@ -410,7 +410,7 @@ regional_dataframe.ipynb
 
 ## [Early] Treatment Effects — Subject-Level Metrics
 
-![w:900px](fig_early_boxplots_treatment_genotype.png)
+![w:900px](figures/fig_early_boxplots_treatment_genotype.png)
 
 > Subject-level summary metrics by treatment × genotype — early cohort.
 
@@ -420,7 +420,7 @@ regional_dataframe.ipynb
 
 ## [Early] Violin — Plaque Size by Treatment & Genotype
 
-![w:900px](fig_early_violin_plaque_size.png)
+![w:900px](figures/fig_early_violin_plaque_size.png)
 
 > Per-plaque size distributions by treatment × genotype — early cohort.
 
@@ -428,7 +428,7 @@ regional_dataframe.ipynb
 
 ## [Early] Treatment × Genotype Interaction
 
-![w:900px](fig_early_interaction_plots.png)
+![w:900px](figures/fig_early_interaction_plots.png)
 
 > Mean ± SEM interaction plots for key metrics — early cohort.
 
@@ -436,7 +436,7 @@ regional_dataframe.ipynb
 
 ## [Early] Plaque Count Stratified by Genotype
 
-![w:900px](fig_early_stratified_by_genotype.png)
+![w:900px](figures/fig_early_stratified_by_genotype.png)
 
 > Per-subject plaque counts stratified by genotype — early cohort.
 
@@ -446,7 +446,7 @@ regional_dataframe.ipynb
 
 ## [Early] ECDF — Plaque Size by Genotype
 
-![w:900px](fig_early_ecdf_size_by_genotype.png)
+![w:900px](figures/fig_early_ecdf_size_by_genotype.png)
 
 > Empirical CDF of per-plaque size by genotype — early cohort.
 
@@ -456,7 +456,7 @@ regional_dataframe.ipynb
 
 ## [Early] Plaque Size Distribution
 
-![w:900px](fig_early_size_distribution_by_genotype.png)
+![w:900px](figures/fig_early_size_distribution_by_genotype.png)
 
 > Histogram of per-plaque size distributions by genotype — early cohort.
 
@@ -470,7 +470,7 @@ regional_dataframe.ipynb
 
 ## [Early] SDT ECDF — Distance to Vessel Wall
 
-![w:900px](fig_early_sdt_ecdf.png)
+![w:900px](figures/fig_early_sdt_ecdf.png)
 
 > ECDF of signed distance transform (SDT) to nearest vessel — early cohort.
 
@@ -480,7 +480,7 @@ regional_dataframe.ipynb
 
 ## [Early] Plaque–Vessel Proximity Fractions (Stacked)
 
-![w:900px](fig_early_proximity_fractions_stacked.png)
+![w:900px](figures/fig_early_proximity_fractions_stacked.png)
 
 > Stacked bar charts of categorized plaque–vessel proximity — early cohort.
 
@@ -488,7 +488,7 @@ regional_dataframe.ipynb
 
 ## [Early] Plaque–Vessel Proximity Fractions
 
-![w:900px](fig_early_proximity_fractions.png)
+![w:900px](figures/fig_early_proximity_fractions.png)
 
 > Grouped bar charts of plaque–vessel proximity fractions — early cohort.
 
@@ -496,7 +496,7 @@ regional_dataframe.ipynb
 
 ## [Early] Proximity × Treatment Interaction
 
-![w:900px](fig_early_proximity_interaction.png)
+![w:900px](figures/fig_early_proximity_interaction.png)
 
 > Interaction plots for proximity fractions by treatment × genotype — early cohort.
 
@@ -506,7 +506,7 @@ regional_dataframe.ipynb
 
 ## [Early] Vessel Calibre ECDF
 
-![w:900px](fig_early_vessel_calibre_ecdf.png)
+![w:900px](figures/fig_early_vessel_calibre_ecdf.png)
 
 > ECDF of estimated vessel calibre for intravascular plaques — early cohort.
 
@@ -516,7 +516,7 @@ regional_dataframe.ipynb
 
 ## [Early] Vessel Calibre by Subject
 
-![w:900px](fig_early_vessel_calibre_subject.png)
+![w:900px](figures/fig_early_vessel_calibre_subject.png)
 
 > Estimated vessel calibre per subject — early cohort.
 
@@ -524,7 +524,7 @@ regional_dataframe.ipynb
 
 ## [Early] Vessel Diameter Bins
 
-![w:900px](fig_early_vessel_diam_bins.png)
+![w:900px](figures/fig_early_vessel_diam_bins.png)
 
 > Distribution of plaques across vessel diameter bins — early cohort.
 
@@ -532,7 +532,7 @@ regional_dataframe.ipynb
 
 ## [Early] Spatial Vessel Proximity
 
-![w:900px](fig_early_spatial_vessel_proximity.png)
+![w:900px](figures/fig_early_spatial_vessel_proximity.png)
 
 > Spatial mapping of plaque–vessel proximity across the brain — early cohort.
 
@@ -553,7 +553,7 @@ regional_dataframe.ipynb
 
 ## [Late] Regional Plaque Burden
 
-![w:900px](fig_late_roi_top_density.png)
+![w:900px](figures/fig_late_roi_top_density.png)
 
 > **Top brain regions** ranked by mean Aβ plaque density — late cohort.
 
@@ -563,7 +563,7 @@ regional_dataframe.ipynb
 
 ## [Late] ROI Density Boxplot
 
-![w:900px](fig_late_roi_density_boxplot.png)
+![w:900px](figures/fig_late_roi_density_boxplot.png)
 
 > Per-subject plaque density distributions across top regions — late cohort.
 
@@ -573,7 +573,7 @@ regional_dataframe.ipynb
 
 ## [Late] Multi-Metric Regional Heatmap
 
-![w:900px](fig_late_roi_metric_heatmap.png)
+![w:900px](figures/fig_late_roi_metric_heatmap.png)
 
 > Each metric is normalised [0, 1] per column — late cohort.
 
@@ -581,7 +581,7 @@ regional_dataframe.ipynb
 
 ## [Late] ROI Proximity Fractions
 
-![w:900px](fig_late_roi_proximity_fractions.png)
+![w:900px](figures/fig_late_roi_proximity_fractions.png)
 
 > Fraction of plaques near/inside vessels per region — late cohort.
 
@@ -591,7 +591,7 @@ regional_dataframe.ipynb
 
 ## [Late] ROI Treatment Fold-Change
 
-![w:900px](fig_late_roi_fold_change.png)
+![w:900px](figures/fig_late_roi_fold_change.png)
 
 > Log₂ fold-change (Lecanemab / PBS) per ROI — late cohort.
 
@@ -599,7 +599,7 @@ regional_dataframe.ipynb
 
 ## [Late] Atlas-Level Plaque Density — All Subjects
 
-![w:900px](fig_late_atlas_density_all.png)
+![w:900px](figures/fig_late_atlas_density_all.png)
 
 > Max-intensity projection of mean plaque density — late cohort.
 
@@ -607,7 +607,7 @@ regional_dataframe.ipynb
 
 ## [Late] Atlas-Level Density by Group
 
-![w:900px](fig_late_atlas_density_groups.png)
+![w:900px](figures/fig_late_atlas_density_groups.png)
 
 > Plaque density heatmaps by treatment × genotype — late cohort.
 
@@ -615,7 +615,7 @@ regional_dataframe.ipynb
 
 ## [Late] Treatment Fold-Change Atlas
 
-![w:900px](fig_late_atlas_fold_change.png)
+![w:900px](figures/fig_late_atlas_fold_change.png)
 
 > Log₂ fold-change (Lecanemab / PBS) painted onto atlas volume — late cohort.
 
@@ -623,7 +623,7 @@ regional_dataframe.ipynb
 
 ## [Late] Atlas Mean Plaque Diameter
 
-![w:900px](fig_late_atlas_mean_diam.png)
+![w:900px](figures/fig_late_atlas_mean_diam.png)
 
 > Mean equivalent plaque diameter painted onto atlas volume — late cohort.
 
@@ -631,7 +631,7 @@ regional_dataframe.ipynb
 
 ## [Late] Atlas Fraction Inside Vessel
 
-![w:900px](fig_late_atlas_frac_inside.png)
+![w:900px](figures/fig_late_atlas_frac_inside.png)
 
 > Fraction of intravascular plaques painted onto atlas volume — late cohort.
 
@@ -647,7 +647,7 @@ regional_dataframe.ipynb
 
 ## [Late] Treatment Effects — Subject-Level Metrics
 
-![w:900px](fig_late_boxplots_treatment_genotype.png)
+![w:900px](figures/fig_late_boxplots_treatment_genotype.png)
 
 > Subject-level summary metrics by treatment × genotype — late cohort.
 
@@ -657,7 +657,7 @@ regional_dataframe.ipynb
 
 ## [Late] Violin — Plaque Size by Treatment & Genotype
 
-![w:900px](fig_late_violin_plaque_size.png)
+![w:900px](figures/fig_late_violin_plaque_size.png)
 
 > Per-plaque size distributions by treatment × genotype — late cohort.
 
@@ -665,7 +665,7 @@ regional_dataframe.ipynb
 
 ## [Late] Treatment × Genotype Interaction
 
-![w:900px](fig_late_interaction_plots.png)
+![w:900px](figures/fig_late_interaction_plots.png)
 
 > Mean ± SEM interaction plots for key metrics — late cohort.
 
@@ -673,7 +673,7 @@ regional_dataframe.ipynb
 
 ## [Late] Plaque Count Stratified by Genotype
 
-![w:900px](fig_late_stratified_by_genotype.png)
+![w:900px](figures/fig_late_stratified_by_genotype.png)
 
 > Per-subject plaque counts stratified by genotype — late cohort.
 
@@ -683,7 +683,7 @@ regional_dataframe.ipynb
 
 ## [Late] ECDF — Plaque Size by Genotype
 
-![w:900px](fig_late_ecdf_size_by_genotype.png)
+![w:900px](figures/fig_late_ecdf_size_by_genotype.png)
 
 > Empirical CDF of per-plaque size by genotype — late cohort.
 
@@ -693,7 +693,7 @@ regional_dataframe.ipynb
 
 ## [Late] Plaque Size Distribution
 
-![w:900px](fig_late_size_distribution_by_genotype.png)
+![w:900px](figures/fig_late_size_distribution_by_genotype.png)
 
 > Histogram of per-plaque size distributions by genotype — late cohort.
 
@@ -707,7 +707,7 @@ regional_dataframe.ipynb
 
 ## [Late] SDT ECDF — Distance to Vessel Wall
 
-![w:900px](fig_late_sdt_ecdf.png)
+![w:900px](figures/fig_late_sdt_ecdf.png)
 
 > ECDF of signed distance transform (SDT) to nearest vessel — late cohort.
 
@@ -717,7 +717,7 @@ regional_dataframe.ipynb
 
 ## [Late] Plaque–Vessel Proximity Fractions (Stacked)
 
-![w:900px](fig_late_proximity_fractions_stacked.png)
+![w:900px](figures/fig_late_proximity_fractions_stacked.png)
 
 > Stacked bar charts of categorized plaque–vessel proximity — late cohort.
 
@@ -725,7 +725,7 @@ regional_dataframe.ipynb
 
 ## [Late] Plaque–Vessel Proximity Fractions
 
-![w:900px](fig_late_proximity_fractions.png)
+![w:900px](figures/fig_late_proximity_fractions.png)
 
 > Grouped bar charts of plaque–vessel proximity fractions — late cohort.
 
@@ -733,7 +733,7 @@ regional_dataframe.ipynb
 
 ## [Late] Proximity × Treatment Interaction
 
-![w:900px](fig_late_proximity_interaction.png)
+![w:900px](figures/fig_late_proximity_interaction.png)
 
 > Interaction plots for proximity fractions by treatment × genotype — late cohort.
 
@@ -743,7 +743,7 @@ regional_dataframe.ipynb
 
 ## [Late] Vessel Calibre ECDF
 
-![w:900px](fig_late_vessel_calibre_ecdf.png)
+![w:900px](figures/fig_late_vessel_calibre_ecdf.png)
 
 > ECDF of estimated vessel calibre for intravascular plaques — late cohort.
 
@@ -753,7 +753,7 @@ regional_dataframe.ipynb
 
 ## [Late] Vessel Calibre by Subject
 
-![w:900px](fig_late_vessel_calibre_subject.png)
+![w:900px](figures/fig_late_vessel_calibre_subject.png)
 
 > Estimated vessel calibre per subject — late cohort.
 
@@ -761,7 +761,7 @@ regional_dataframe.ipynb
 
 ## [Late] Vessel Diameter Bins
 
-![w:900px](fig_late_vessel_diam_bins.png)
+![w:900px](figures/fig_late_vessel_diam_bins.png)
 
 > Distribution of plaques across vessel diameter bins — late cohort.
 
@@ -769,7 +769,7 @@ regional_dataframe.ipynb
 
 ## [Late] Spatial Vessel Proximity
 
-![w:900px](fig_late_spatial_vessel_proximity.png)
+![w:900px](figures/fig_late_spatial_vessel_proximity.png)
 
 > Spatial mapping of plaque–vessel proximity across the brain — late cohort.
 

@@ -26,28 +26,9 @@ from statsmodels.stats.anova import anova_lm  # noqa: E402
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # ── Snakemake integration ────────────────────────────────────────────────────
-if "snakemake" in dir():
-    input_parquet = str(snakemake.input.parquet)  # noqa: F821
-    output_figs = dict(snakemake.output)  # noqa: F821
-    cohort = snakemake.wildcards.cohort  # noqa: F821
-else:
-    import argparse
-
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--parquet", required=True)
-    parser.add_argument("--output-dir", required=True)
-    parser.add_argument("--cohort", required=True)
-    args = parser.parse_args()
-    input_parquet = args.parquet
-    cohort = args.cohort
-    output_figs = {
-        fig: f"{args.output_dir}/fig_{cohort}_{fig}.png"
-        for fig in [
-            "sdt_ecdf", "proximity_fractions_stacked", "proximity_fractions",
-            "proximity_interaction", "vessel_calibre_ecdf", "vessel_calibre_subject",
-            "vessel_diam_bins", "spatial_vessel_proximity",
-        ]
-    }
+input_parquet = str(snakemake.input.parquet)  # noqa: F821
+output_figs = dict(snakemake.output)  # noqa: F821
+cohort = snakemake.wildcards.cohort  # noqa: F821
 
 # ── Constants ────────────────────────────────────────────────────────────────
 sns.set_theme(style="whitegrid", font_scale=1.1)

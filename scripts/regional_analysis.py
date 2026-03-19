@@ -26,33 +26,10 @@ import seaborn as sns  # noqa: E402
 
 warnings.filterwarnings("ignore")
 
-# ── Snakemake integration ────────────────────────────────────────────────────
-if "snakemake" in dir():
-    input_roi = str(snakemake.input.roi_parquet)  # noqa: F821
-    input_atlas = str(snakemake.input.atlas)  # noqa: F821
-    output_figs = dict(snakemake.output)  # noqa: F821
-    cohort = snakemake.wildcards.cohort  # noqa: F821
-else:
-    import argparse
-
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--roi-parquet", required=True)
-    parser.add_argument("--atlas", required=True)
-    parser.add_argument("--output-dir", required=True)
-    parser.add_argument("--cohort", required=True)
-    args = parser.parse_args()
-    input_roi = args.roi_parquet
-    input_atlas = args.atlas
-    cohort = args.cohort
-    output_figs = {
-        fig: f"{args.output_dir}/fig_{cohort}_{fig}.png"
-        for fig in [
-            "roi_top_density", "roi_density_boxplot", "roi_metric_heatmap",
-            "roi_proximity_fractions", "roi_fold_change", "atlas_density_all",
-            "atlas_density_groups", "atlas_fold_change", "atlas_mean_diam",
-            "atlas_frac_inside",
-        ]
-    }
+input_roi = str(snakemake.input.roi_parquet)  # noqa: F821
+input_atlas = str(snakemake.input.atlas)  # noqa: F821
+output_figs = dict(snakemake.output)  # noqa: F821
+cohort = snakemake.wildcards.cohort  # noqa: F821
 
 # ── Constants ────────────────────────────────────────────────────────────────
 sns.set_theme(style="whitegrid", font_scale=1.1)
