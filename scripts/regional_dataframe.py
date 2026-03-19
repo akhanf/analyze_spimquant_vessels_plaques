@@ -11,22 +11,9 @@ import pandas as pd
 
 warnings.filterwarnings("ignore")
 
-# ── Snakemake integration ────────────────────────────────────────────────────
-if "snakemake" in dir():
-    input_parquet = str(snakemake.input.parquet)  # noqa: F821
-    input_lut = str(snakemake.input.lut)  # noqa: F821
-    output_parquet = str(snakemake.output[0])  # noqa: F821
-else:
-    import argparse
-
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--parquet", required=True)
-    parser.add_argument("--lut", required=True)
-    parser.add_argument("--output", required=True)
-    args = parser.parse_args()
-    input_parquet = args.parquet
-    input_lut = args.lut
-    output_parquet = args.output
+input_parquet = str(snakemake.input.parquet)  # noqa: F821
+input_lut = str(snakemake.input.lut)  # noqa: F821
+output_parquet = str(snakemake.output[0])  # noqa: F821
 
 # ── Constants ────────────────────────────────────────────────────────────────
 VOL_THRESH_ML = 1e-4

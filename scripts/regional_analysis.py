@@ -1,19 +1,17 @@
 """Regional (ROI) and atlas-level analysis figures.
 
 Reads  : roi_data_{cohort}.parquet  +  tpl-ABAv3_seg-all_dseg.nii.gz
-Writes : fig_{cohort}_{fig}.png
-
-Figure types (passed via Snakemake wildcard `fig` or --fig CLI arg):
-  roi_top_density         bar chart of top 20 regions by plaque density
-  roi_density_boxplot     boxplot of density in top regions by treatment
-  roi_metric_heatmap      multi-metric normalised heatmap
-  roi_proximity_fractions vessel-proximity fraction boxplots (top regions)
-  roi_fold_change         treatment fold-change heatmap (region × genotype)
-  atlas_density_all       atlas MIP coloured by mean plaque density
-  atlas_density_groups    atlas MIPs per treatment × genotype group
-  atlas_fold_change       atlas MIPs coloured by log₂ fold-change
-  atlas_mean_diam         atlas MIP coloured by mean plaque diameter
-  atlas_frac_inside       atlas MIP coloured by fraction inside vessel
+Writes (one file per figure):
+  fig_{cohort}_roi_top_density.png         bar chart of top 20 regions by plaque density
+  fig_{cohort}_roi_density_boxplot.png     boxplot of density in top regions by treatment
+  fig_{cohort}_roi_metric_heatmap.png      multi-metric normalised heatmap
+  fig_{cohort}_roi_proximity_fractions.png vessel-proximity fraction boxplots (top regions)
+  fig_{cohort}_roi_fold_change.png         treatment fold-change heatmap (region × genotype)
+  fig_{cohort}_atlas_density_all.png       atlas MIP coloured by mean plaque density
+  fig_{cohort}_atlas_density_groups.png    atlas MIPs per treatment × genotype group
+  fig_{cohort}_atlas_fold_change.png       atlas MIPs coloured by log₂ fold-change
+  fig_{cohort}_atlas_mean_diam.png         atlas MIP coloured by mean plaque diameter
+  fig_{cohort}_atlas_frac_inside.png       atlas MIP coloured by fraction inside vessel
 """
 
 import warnings
@@ -28,28 +26,10 @@ import seaborn as sns  # noqa: E402
 
 warnings.filterwarnings("ignore")
 
-# ── Snakemake integration ────────────────────────────────────────────────────
-if "snakemake" in dir():
-    input_roi = str(snakemake.input.roi_parquet)  # noqa: F821
-    input_atlas = str(snakemake.input.atlas)  # noqa: F821
-    output_fig = str(snakemake.output[0])  # noqa: F821
-    cohort = snakemake.wildcards.cohort  # noqa: F821
-    fig_type = snakemake.wildcards.fig  # noqa: F821
-else:
-    import argparse
-
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--roi-parquet", required=True)
-    parser.add_argument("--atlas", required=True)
-    parser.add_argument("--output", required=True)
-    parser.add_argument("--cohort", required=True)
-    parser.add_argument("--fig", required=True)
-    args = parser.parse_args()
-    input_roi = args.roi_parquet
-    input_atlas = args.atlas
-    output_fig = args.output
-    cohort = args.cohort
-    fig_type = args.fig
+input_roi = str(snakemake.input.roi_parquet)  # noqa: F821
+input_atlas = str(snakemake.input.atlas)  # noqa: F821
+output_figs = dict(snakemake.output)  # noqa: F821
+cohort = snakemake.wildcards.cohort  # noqa: F821
 
 # ── Constants ────────────────────────────────────────────────────────────────
 sns.set_theme(style="whitegrid", font_scale=1.1)
@@ -159,250 +139,237 @@ roi_top["region_abbr"] = roi_top["name"].str.replace(r"^(left|right) ", "", rege
 
 
 # ── Figure dispatch ───────────────────────────────────────────────────────────
-if fig_type == "roi_top_density":
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.barh(
-        top_regions["name"],
-        top_regions["plaque_density"],
-        color="steelblue", edgecolor="white", height=0.7,
-    )
-    ax.set_xlabel("Mean plaque density (plaques / mm\u00b3)")
-    ax.set_title(f"Top {TOP_N} regions by plaque density \u2014 {cohort}")
-    ax.invert_yaxis()
-    plt.tight_layout()
-    plt.savefig(output_fig, dpi=150)
-    plt.close(fig)
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.barh(
+    top_regions["name"],
+    top_regions["plaque_density"],
+    color="steelblue", edgecolor="white", height=0.7,
+)
+ax.set_xlabel("Mean plaque density (plaques / mm\u00b3)")
+ax.set_title(f"Top {TOP_N} regions by plaque density \u2014 {cohort}")
+ax.invert_yaxis()
+plt.tight_layout()
+plt.savefig(output_figs["roi_top_density"], dpi=150)
+plt.close(fig)
 
-elif fig_type == "roi_density_boxplot":
-    fig, axes = plt.subplots(1, n_geno, figsize=(8 * n_geno, 7), sharey=True, squeeze=False)
-    for ax, geno in zip(axes[0], geno_present):
-        sub = roi_top.loc[roi_top["genotype"] == geno]
-        sns.boxplot(
-            data=sub, y="region_abbr", x="plaque_density", hue="treatment",
-            hue_order=TREAT_ORDER, palette=TREAT_PALETTE, orient="h", width=0.6, ax=ax,
-        )
-        ax.set_title(geno, fontsize=13)
-        ax.set_xlabel("Plaque density (plaques / mm\u00b3)")
-        ax.set_ylabel("Region")
-        ax.legend(title="Treatment", loc="lower right")
-    fig.suptitle(
-        f"Top {TOP_N} regions \u2014 plaque density by treatment \u2014 {cohort}",
-        fontsize=14,
+fig, axes = plt.subplots(1, n_geno, figsize=(8 * n_geno, 7), sharey=True, squeeze=False)
+for ax, geno in zip(axes[0], geno_present):
+    sub = roi_top.loc[roi_top["genotype"] == geno]
+    sns.boxplot(
+        data=sub, y="region_abbr", x="plaque_density", hue="treatment",
+        hue_order=TREAT_ORDER, palette=TREAT_PALETTE, orient="h", width=0.6, ax=ax,
     )
-    plt.tight_layout()
-    plt.savefig(output_fig, dpi=150)
-    plt.close(fig)
+    ax.set_title(geno, fontsize=13)
+    ax.set_xlabel("Plaque density (plaques / mm\u00b3)")
+    ax.set_ylabel("Region")
+    ax.legend(title="Treatment", loc="lower right")
+fig.suptitle(
+    f"Top {TOP_N} regions \u2014 plaque density by treatment \u2014 {cohort}",
+    fontsize=14,
+)
+plt.tight_layout()
+plt.savefig(output_figs["roi_density_boxplot"], dpi=150)
+plt.close(fig)
 
-elif fig_type == "roi_metric_heatmap":
-    DISPLAY_METRICS = {
-        "plaque_density": "Density\n(n/mm\u00b3)",
-        "vol_density_ml": "Vol density\n(mL/mm\u00b3)",
-        "mean_diam_um": "Mean diam\n(\u00b5m)",
-        "median_diam_um": "Median diam\n(\u00b5m)",
-        "mean_sdt_um": "Mean SDT\n(\u00b5m)",
-        "frac_inside_vessel": "Frac inside\nvessel",
-        "frac_near_vessel": "Frac near\nvessel",
-        "frac_far_vessel": "Frac far\nfrom vessel",
-    }
-    summary_tbl = (
-        roi_mean.loc[roi_mean["index"].isin(top_idx)]
-        .set_index("name")[list(DISPLAY_METRICS.keys())]
-        .rename(columns=DISPLAY_METRICS)
-        .loc[top_regions["name"]]
-    )
-    norm_tbl = (summary_tbl - summary_tbl.min()) / (
-        summary_tbl.max() - summary_tbl.min() + 1e-12
-    )
-    fig, ax = plt.subplots(figsize=(13, 8))
-    im = ax.imshow(norm_tbl.values, cmap="YlOrRd", aspect="auto", vmin=0, vmax=1)
-    ax.set_xticks(range(len(norm_tbl.columns)))
-    ax.set_xticklabels(norm_tbl.columns, fontsize=9)
-    ax.set_yticks(range(len(norm_tbl)))
-    ax.set_yticklabels(norm_tbl.index, fontsize=9)
-    plt.colorbar(im, ax=ax, label="Normalised value")
-    ax.set_title(
-        f"Multi-metric summary \u2014 top {TOP_N} regions \u2014 {cohort}"
-        " (all-subjects mean, normalised per column)"
-    )
-    plt.tight_layout()
-    plt.savefig(output_fig, dpi=150)
-    plt.close(fig)
+DISPLAY_METRICS = {
+    "plaque_density": "Density\n(n/mm\u00b3)",
+    "vol_density_ml": "Vol density\n(mL/mm\u00b3)",
+    "mean_diam_um": "Mean diam\n(\u00b5m)",
+    "median_diam_um": "Median diam\n(\u00b5m)",
+    "mean_sdt_um": "Mean SDT\n(\u00b5m)",
+    "frac_inside_vessel": "Frac inside\nvessel",
+    "frac_near_vessel": "Frac near\nvessel",
+    "frac_far_vessel": "Frac far\nfrom vessel",
+}
+summary_tbl = (
+    roi_mean.loc[roi_mean["index"].isin(top_idx)]
+    .set_index("name")[list(DISPLAY_METRICS.keys())]
+    .rename(columns=DISPLAY_METRICS)
+    .loc[top_regions["name"]]
+)
+norm_tbl = (summary_tbl - summary_tbl.min()) / (
+    summary_tbl.max() - summary_tbl.min() + 1e-12
+)
+fig, ax = plt.subplots(figsize=(13, 8))
+im = ax.imshow(norm_tbl.values, cmap="YlOrRd", aspect="auto", vmin=0, vmax=1)
+ax.set_xticks(range(len(norm_tbl.columns)))
+ax.set_xticklabels(norm_tbl.columns, fontsize=9)
+ax.set_yticks(range(len(norm_tbl)))
+ax.set_yticklabels(norm_tbl.index, fontsize=9)
+plt.colorbar(im, ax=ax, label="Normalised value")
+ax.set_title(
+    f"Multi-metric summary \u2014 top {TOP_N} regions \u2014 {cohort}"
+    " (all-subjects mean, normalised per column)"
+)
+plt.tight_layout()
+plt.savefig(output_figs["roi_metric_heatmap"], dpi=150)
+plt.close(fig)
 
-elif fig_type == "roi_proximity_fractions":
-    prox_cols = ["frac_inside_vessel", "frac_near_vessel", "frac_far_vessel"]
-    prox_labels = ["Inside vessel", "Near vessel", "Far from vessel"]
-    fig, axes = plt.subplots(1, len(prox_cols), figsize=(18, 7), sharey=True)
-    for ax, col, label in zip(axes, prox_cols, prox_labels):
-        sns.boxplot(
-            data=roi_top, y="region_abbr", x=col, hue="treatment",
-            hue_order=TREAT_ORDER, palette=TREAT_PALETTE, orient="h", width=0.6, ax=ax,
-        )
-        ax.set_title(label, fontsize=12)
-        ax.set_xlabel("Fraction of plaques")
-        ax.set_ylabel("Region" if ax is axes[0] else "")
-        ax.legend(title="Treatment", fontsize=8)
-    fig.suptitle(
-        f"Vessel-proximity fractions \u2014 top {TOP_N} regions \u2014 {cohort}",
-        fontsize=14,
+prox_cols = ["frac_inside_vessel", "frac_near_vessel", "frac_far_vessel"]
+prox_labels = ["Inside vessel", "Near vessel", "Far from vessel"]
+fig, axes = plt.subplots(1, len(prox_cols), figsize=(18, 7), sharey=True)
+for ax, col, label in zip(axes, prox_cols, prox_labels):
+    sns.boxplot(
+        data=roi_top, y="region_abbr", x=col, hue="treatment",
+        hue_order=TREAT_ORDER, palette=TREAT_PALETTE, orient="h", width=0.6, ax=ax,
     )
-    plt.tight_layout()
-    plt.savefig(output_fig, dpi=150)
-    plt.close(fig)
+    ax.set_title(label, fontsize=12)
+    ax.set_xlabel("Fraction of plaques")
+    ax.set_ylabel("Region" if ax is axes[0] else "")
+    ax.legend(title="Treatment", fontsize=8)
+fig.suptitle(
+    f"Vessel-proximity fractions \u2014 top {TOP_N} regions \u2014 {cohort}",
+    fontsize=14,
+)
+plt.tight_layout()
+plt.savefig(output_figs["roi_proximity_fractions"], dpi=150)
+plt.close(fig)
 
-elif fig_type == "roi_fold_change":
-    fc_df = roi_fold_change(
-        roi_df, top_idx=top_idx, top_regions=top_regions, geno_order=geno_present
-    )
-    log_fc = np.log2(fc_df.values.astype(float))
-    vabs = np.nanmax(np.abs(log_fc))
-    if not np.isfinite(vabs):
-        vabs = 1.0
-    fig, ax = plt.subplots(figsize=(4 + 2 * n_geno, 8))
-    im = ax.imshow(log_fc, cmap="RdBu", aspect="auto", vmin=-vabs, vmax=vabs)
-    ax.set_xticks(range(len(fc_df.columns)))
-    ax.set_xticklabels(fc_df.columns, fontsize=11)
-    ax.set_yticks(range(len(fc_df)))
-    ax.set_yticklabels(fc_df.index, fontsize=9)
-    cbar = plt.colorbar(im, ax=ax)
-    cbar.set_label("log\u2082 fold-change (Lecanemab / PBS)")
-    ax.set_title(f"Treatment fold-change per ROI \u2014 {cohort}", fontsize=13)
-    plt.tight_layout()
-    plt.savefig(output_fig, dpi=150)
-    plt.close(fig)
+fc_df = roi_fold_change(
+    roi_df, top_idx=top_idx, top_regions=top_regions, geno_order=geno_present
+)
+log_fc = np.log2(fc_df.values.astype(float))
+vabs = np.nanmax(np.abs(log_fc))
+if not np.isfinite(vabs):
+    vabs = 1.0
+fig, ax = plt.subplots(figsize=(4 + 2 * n_geno, 8))
+im = ax.imshow(log_fc, cmap="RdBu", aspect="auto", vmin=-vabs, vmax=vabs)
+ax.set_xticks(range(len(fc_df.columns)))
+ax.set_xticklabels(fc_df.columns, fontsize=11)
+ax.set_yticks(range(len(fc_df)))
+ax.set_yticklabels(fc_df.index, fontsize=9)
+cbar = plt.colorbar(im, ax=ax)
+cbar.set_label("log\u2082 fold-change (Lecanemab / PBS)")
+ax.set_title(f"Treatment fold-change per ROI \u2014 {cohort}", fontsize=13)
+plt.tight_layout()
+plt.savefig(output_figs["roi_fold_change"], dpi=150)
+plt.close(fig)
 
-elif fig_type == "atlas_density_all":
-    density_all = roi_df.groupby("index", observed=True)["plaque_density"].mean()
-    vol_density = make_metric_volume(atlas_data, density_all)
-    plot_atlas_heatmap(
-        vol_density,
-        title=f"Mean plaque density \u2014 {cohort}",
-        cmap="hot",
-        cbar_label="Plaque density (n / mm\u00b3)",
-        vmin=0,
-        savepath=output_fig,
-    )
+density_all = roi_df.groupby("index", observed=True)["plaque_density"].mean()
+vol_density = make_metric_volume(atlas_data, density_all)
+plot_atlas_heatmap(
+    vol_density,
+    title=f"Mean plaque density \u2014 {cohort}",
+    cmap="hot",
+    cbar_label="Plaque density (n / mm\u00b3)",
+    vmin=0,
+    savepath=output_figs["atlas_density_all"],
+)
 
-elif fig_type == "atlas_density_groups":
-    group_vols = {}
-    for geno in geno_present:
-        for treat in TREAT_ORDER:
-            grp_density = (
-                roi_df.loc[(roi_df["genotype"] == geno) & (roi_df["treatment"] == treat)]
-                .groupby("index", observed=True)["plaque_density"]
-                .mean()
-            )
-            group_vols[(geno, treat)] = make_metric_volume(atlas_data, grp_density)
-
-    valid_maxes = [
-        float(np.nanmax(v)) for v in group_vols.values() if np.any(np.isfinite(v))
-    ]
-    vmax_global = max(valid_maxes) if valid_maxes else 1.0
-
-    n_rows = n_geno
-    n_cols = len(TREAT_ORDER) * 3
-    fig, axes_grid = plt.subplots(
-        n_rows, n_cols, figsize=(18, 5 * n_rows), squeeze=False
-    )
-    for gi, geno in enumerate(geno_present):
-        for ti, treat in enumerate(TREAT_ORDER):
-            v = group_vols[(geno, treat)]
-            projs = [np.nanmax(v, axis=a) for a in range(3)]
-            for pi, proj in enumerate(projs):
-                ax = axes_grid[gi, ti * 3 + pi]
-                masked = np.ma.masked_invalid(proj)
-                im = ax.imshow(
-                    masked.T, origin="lower", cmap="hot",
-                    vmin=0, vmax=vmax_global, interpolation="nearest",
-                )
-                ax.axis("off")
-                if pi == 1:
-                    ax.set_title(f"{geno} / {treat}", fontsize=10)
-                if ti == len(TREAT_ORDER) - 1 and pi == 2:
-                    plt.colorbar(im, ax=ax, label="n / mm\u00b3", shrink=0.8)
-    fig.suptitle(
-        f"Plaque density heatmaps by treatment \u00d7 genotype \u2014 {cohort}",
-        fontsize=14,
-    )
-    plt.tight_layout()
-    plt.savefig(output_fig, dpi=150)
-    plt.close(fig)
-
-elif fig_type == "atlas_fold_change":
-    fc_vols = {}
-    for geno in geno_present:
-        pbs_mean = (
-            roi_df.loc[(roi_df["genotype"] == geno) & (roi_df["treatment"] == "PBS")]
+group_vols = {}
+for geno in geno_present:
+    for treat in TREAT_ORDER:
+        grp_density = (
+            roi_df.loc[(roi_df["genotype"] == geno) & (roi_df["treatment"] == treat)]
             .groupby("index", observed=True)["plaque_density"]
             .mean()
         )
-        lec_mean = (
-            roi_df.loc[(roi_df["genotype"] == geno) & (roi_df["treatment"] == "Lecanemab")]
-            .groupby("index", observed=True)["plaque_density"]
-            .mean()
-        )
-        common = pbs_mean.index.intersection(lec_mean.index)
-        log2fc = np.log2(
-            (lec_mean.loc[common] + 1e-9) / (pbs_mean.loc[common] + 1e-9)
-        )
-        fc_vols[geno] = make_metric_volume(atlas_data, log2fc)
+        group_vols[(geno, treat)] = make_metric_volume(atlas_data, grp_density)
 
-    valid_abs = [
-        float(np.nanmax(np.abs(v[np.isfinite(v)])))
-        for v in fc_vols.values()
-        if np.any(np.isfinite(v))
-    ]
-    vabs_global = max(valid_abs) if valid_abs else 1.0
+valid_maxes = [
+    float(np.nanmax(v)) for v in group_vols.values() if np.any(np.isfinite(v))
+]
+vmax_global = max(valid_maxes) if valid_maxes else 1.0
 
-    fig, axes_grid = plt.subplots(
-        n_geno, 3, figsize=(14, 4 * n_geno), squeeze=False
-    )
-    for gi, geno in enumerate(geno_present):
-        v = fc_vols[geno]
-        projs = [np.nanmean(v, axis=a) for a in range(3)]
+n_rows = n_geno
+n_cols = len(TREAT_ORDER) * 3
+fig, axes_grid = plt.subplots(
+    n_rows, n_cols, figsize=(18, 5 * n_rows), squeeze=False
+)
+for gi, geno in enumerate(geno_present):
+    for ti, treat in enumerate(TREAT_ORDER):
+        v = group_vols[(geno, treat)]
+        projs = [np.nanmax(v, axis=a) for a in range(3)]
         for pi, proj in enumerate(projs):
-            ax = axes_grid[gi, pi]
+            ax = axes_grid[gi, ti * 3 + pi]
             masked = np.ma.masked_invalid(proj)
             im = ax.imshow(
-                masked.T, origin="lower", cmap="RdBu",
-                vmin=-vabs_global, vmax=vabs_global, interpolation="nearest",
+                masked.T, origin="lower", cmap="hot",
+                vmin=0, vmax=vmax_global, interpolation="nearest",
             )
             ax.axis("off")
             if pi == 1:
-                ax.set_title(geno, fontsize=11)
-        plt.colorbar(
-            im, ax=axes_grid[gi, -1],
-            label="log\u2082 FC (Lec / PBS)", shrink=0.8,
+                ax.set_title(f"{geno} / {treat}", fontsize=10)
+            if ti == len(TREAT_ORDER) - 1 and pi == 2:
+                plt.colorbar(im, ax=ax, label="n / mm\u00b3", shrink=0.8)
+fig.suptitle(
+    f"Plaque density heatmaps by treatment \u00d7 genotype \u2014 {cohort}",
+    fontsize=14,
+)
+plt.tight_layout()
+plt.savefig(output_figs["atlas_density_groups"], dpi=150)
+plt.close(fig)
+
+fc_vols = {}
+for geno in geno_present:
+    pbs_mean = (
+        roi_df.loc[(roi_df["genotype"] == geno) & (roi_df["treatment"] == "PBS")]
+        .groupby("index", observed=True)["plaque_density"]
+        .mean()
+    )
+    lec_mean = (
+        roi_df.loc[(roi_df["genotype"] == geno) & (roi_df["treatment"] == "Lecanemab")]
+        .groupby("index", observed=True)["plaque_density"]
+        .mean()
+    )
+    common = pbs_mean.index.intersection(lec_mean.index)
+    log2fc = np.log2(
+        (lec_mean.loc[common] + 1e-9) / (pbs_mean.loc[common] + 1e-9)
+    )
+    fc_vols[geno] = make_metric_volume(atlas_data, log2fc)
+
+valid_abs = [
+    float(np.nanmax(np.abs(v[np.isfinite(v)])))
+    for v in fc_vols.values()
+    if np.any(np.isfinite(v))
+]
+vabs_global = max(valid_abs) if valid_abs else 1.0
+
+fig, axes_grid = plt.subplots(
+    n_geno, 3, figsize=(14, 4 * n_geno), squeeze=False
+)
+for gi, geno in enumerate(geno_present):
+    v = fc_vols[geno]
+    projs = [np.nanmean(v, axis=a) for a in range(3)]
+    for pi, proj in enumerate(projs):
+        ax = axes_grid[gi, pi]
+        masked = np.ma.masked_invalid(proj)
+        im = ax.imshow(
+            masked.T, origin="lower", cmap="RdBu",
+            vmin=-vabs_global, vmax=vabs_global, interpolation="nearest",
         )
-    fig.suptitle(
-        f"Treatment fold-change (Lecanemab / PBS) \u2014 {cohort}", fontsize=14
+        ax.axis("off")
+        if pi == 1:
+            ax.set_title(geno, fontsize=11)
+    plt.colorbar(
+        im, ax=axes_grid[gi, -1],
+        label="log\u2082 FC (Lec / PBS)", shrink=0.8,
     )
-    plt.tight_layout()
-    plt.savefig(output_fig, dpi=150)
-    plt.close(fig)
+fig.suptitle(
+    f"Treatment fold-change (Lecanemab / PBS) \u2014 {cohort}", fontsize=14
+)
+plt.tight_layout()
+plt.savefig(output_figs["atlas_fold_change"], dpi=150)
+plt.close(fig)
 
-elif fig_type == "atlas_mean_diam":
-    diam_all = roi_df.groupby("index", observed=True)["mean_diam_um"].mean()
-    vol_diam = make_metric_volume(atlas_data, diam_all)
-    plot_atlas_heatmap(
-        vol_diam,
-        title=f"Mean plaque diameter \u2014 {cohort}",
-        cmap="plasma",
-        cbar_label="Mean equivalent diameter (\u00b5m)",
-        vmin=0,
-        savepath=output_fig,
-    )
+diam_all = roi_df.groupby("index", observed=True)["mean_diam_um"].mean()
+vol_diam = make_metric_volume(atlas_data, diam_all)
+plot_atlas_heatmap(
+    vol_diam,
+    title=f"Mean plaque diameter \u2014 {cohort}",
+    cmap="plasma",
+    cbar_label="Mean equivalent diameter (\u00b5m)",
+    vmin=0,
+    savepath=output_figs["atlas_mean_diam"],
+)
 
-elif fig_type == "atlas_frac_inside":
-    inside_all = roi_df.groupby("index", observed=True)["frac_inside_vessel"].mean()
-    vol_inside = make_metric_volume(atlas_data, inside_all)
-    plot_atlas_heatmap(
-        vol_inside,
-        title=f"Fraction of plaques inside vessels \u2014 {cohort}",
-        cmap="viridis",
-        cbar_label="Fraction inside vessel",
-        vmin=0,
-        savepath=output_fig,
-    )
-
-else:
-    raise ValueError(f"Unknown fig_type: '{fig_type}'")
+inside_all = roi_df.groupby("index", observed=True)["frac_inside_vessel"].mean()
+vol_inside = make_metric_volume(atlas_data, inside_all)
+plot_atlas_heatmap(
+    vol_inside,
+    title=f"Fraction of plaques inside vessels \u2014 {cohort}",
+    cmap="viridis",
+    cbar_label="Fraction inside vessel",
+    vmin=0,
+    savepath=output_figs["atlas_frac_inside"],
+)
