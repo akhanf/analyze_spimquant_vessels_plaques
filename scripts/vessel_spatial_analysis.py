@@ -4,6 +4,7 @@ Reads  : data_{cohort}.parquet
 Writes (one file per figure):
   fig_{cohort}_sdt_ecdf.png                    ECDF of signed distance transform
   fig_{cohort}_proximity_fractions_stacked.png stacked bar chart of proximity fractions
+  fig_{cohort}_proximity_counts_stacked.png    stacked bar chart of proximity counts (absolute)
   fig_{cohort}_proximity_fractions.png         boxplots of subject-level proximity fractions
   fig_{cohort}_proximity_interaction.png       interaction plots for proximity fractions
   fig_{cohort}_vessel_calibre_ecdf.png         ECDF of estimated vessel diameter
@@ -236,6 +237,40 @@ ax.legend(
 ax.set_title(f"Plaque\u2013vessel proximity fractions \u2014 {cohort}")
 plt.tight_layout()
 plt.savefig(output_figs["proximity_fractions_stacked"], dpi=150, bbox_inches="tight")
+plt.close(fig)
+
+# ── Stacked bar chart: absolute counts (shared y-axis) ───────────────────────
+count_bottoms = np.zeros(len(groups))
+fig, ax = plt.subplots(figsize=(9, 5))
+for cat in relation_categories:
+    vals = [
+        prop_df.loc[
+            (prop_df["group"] == g) & (prop_df["vessel_relation"] == cat),
+            "n",
+        ].values[0]
+        if len(
+            prop_df.loc[
+                (prop_df["group"] == g) & (prop_df["vessel_relation"] == cat)
+            ]
+        ) > 0
+        else 0
+        for g in groups
+    ]
+    color = PROX_PALETTE.get(cat, "grey")
+    ax.bar(groups, vals, bottom=count_bottoms, label=cat, color=color, width=0.6)
+    count_bottoms += np.array(vals)
+ax.set_ylabel("Number of plaques")
+ax.set_xlabel("")
+ax.set_xticklabels(groups, rotation=20, ha="right")
+ax.legend(
+    title="Vessel relation",
+    bbox_to_anchor=(1.01, 1),
+    loc="upper left",
+    fontsize=8,
+)
+ax.set_title(f"Plaque\u2013vessel proximity counts \u2014 {cohort}")
+plt.tight_layout()
+plt.savefig(output_figs["proximity_counts_stacked"], dpi=150, bbox_inches="tight")
 plt.close(fig)
 
 subj_prox = subject_proximity_fractions(df)
