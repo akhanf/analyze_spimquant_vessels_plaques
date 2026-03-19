@@ -31,7 +31,42 @@ which is also sampled at each point (`sdt_CD31`).
 The ApoE isoform (`genotype`), `sex` and type of injection (`treatment`) is annotated 
 for each `subject` plaque instance. 
 
-## Slide deck
+## Analysis workflow
+
+The analysis pipeline is implemented as a [Snakemake](https://snakemake.readthedocs.io/)
+workflow. Each Snakemake rule produces a different figure or intermediate data file,
+parameterised by cohort (`early` / `late`).
+
+### Running the workflow
+
+The environment is managed by [pixi](https://pixi.sh). With pixi installed, run:
+
+```bash
+# Run all analyses (regenerate all figures)
+pixi run run_workflow
+```
+
+This is equivalent to:
+
+```bash
+snakemake --cores all --rerun-triggers mtime
+```
+
+### Workflow rules
+
+| Rule | Script | Inputs | Outputs |
+|------|--------|--------|---------|
+| `import_data` | `scripts/import_data.py` | raw SPIMquant TSVs (config) | `data_{cohort}.parquet` |
+| `regional_dataframe` | `scripts/regional_dataframe.py` | `data_{cohort}.parquet`, atlas TSV | `roi_data_{cohort}.parquet` |
+| `regional_analysis` | `scripts/regional_analysis.py` | `roi_data_{cohort}.parquet`, atlas NIfTI | `fig_{cohort}_{roi_or_atlas_fig}.png` |
+| `treatment_analysis` | `scripts/treatment_effect_analysis.py` | `data_{cohort}.parquet` | `fig_{cohort}_{treatment_fig}.png` |
+| `vessel_analysis` | `scripts/vessel_spatial_analysis.py` | `data_{cohort}.parquet` | `fig_{cohort}_{vessel_fig}.png` |
+
+> **Note**: `import_data` is only needed when raw SPIMquant output is available.
+> The pre-processed parquet files (`data_*.parquet`) are already committed to this
+> repository. Provide dataset paths via `--config datasets=config.yaml` to re-import.
+
+
 
 A [Marp](https://marp.app)-based presentation summarising the methods and results is
 available in [`presentation.md`](presentation.md).

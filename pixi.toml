@@ -1,15 +1,15 @@
 [workspace]
 authors = ["Ali Khan <alik@robarts.ca>"]
-channels = ["conda-forge"]
+channels = ["conda-forge", "bioconda"]
 name = "analyze_spimquant"
 platforms = ["linux-64"]
 version = "0.1.0"
 
 [tasks]
-run_notebooks = { cmd = "jupyter nbconvert --to notebook --execute --inplace import_data.ipynb regional_dataframe.ipynb regional_analysis.ipynb treatment_effect_analysis.ipynb vessel_spatial_analysis.ipynb" }
+run_workflow = { cmd = "snakemake --cores all" }
 
 [dependencies]
-jupyterlab = ">=4.5.6,<5"
+snakemake-minimal = ">=9.0,<10"
 matplotlib = ">=3.10.8,<4"
 pandas = ">=3.0.1,<4"
 pyarrow = ">=23.0.1,<24"
