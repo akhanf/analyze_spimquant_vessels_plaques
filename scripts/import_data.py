@@ -59,6 +59,14 @@ df_dataset = pd.concat(subject_dfs, ignore_index=False).merge(
 # keep only Lecanemab and PBS (vehicle) arms
 df = df_dataset.query("treatment == 'Lecanemab' or treatment == 'PBS'").copy()
 
+# drop instances with atlas label index == 0 (background)
+n_before = len(df)
+df = df[df["index"] != 0].copy()
+print(
+    f"Dropped {n_before - len(df):,} background instances (index == 0); "
+    f"{len(df):,} remaining"
+)
+
 # add derived variables
 df["sdt_CD31_um"] = df["sdt_CD31"] * 1000.0
 df["plaque_vol_um3"] = df["nvoxels"] * VOXEL_VOL_UM3
