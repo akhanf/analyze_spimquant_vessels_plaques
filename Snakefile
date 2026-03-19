@@ -48,6 +48,7 @@ TREATMENT_FIGS = [
 VESSEL_FIGS = [
     "sdt_ecdf",
     "proximity_fractions_stacked",
+    "proximity_counts_stacked",
     "proximity_fractions",
     "proximity_interaction",
     "vessel_calibre_ecdf",
@@ -138,6 +139,7 @@ rule vessel_analysis:
     output:
         sdt_ecdf="figures/fig_{cohort}_sdt_ecdf.png",
         proximity_fractions_stacked="figures/fig_{cohort}_proximity_fractions_stacked.png",
+        proximity_counts_stacked="figures/fig_{cohort}_proximity_counts_stacked.png",
         proximity_fractions="figures/fig_{cohort}_proximity_fractions.png",
         proximity_interaction="figures/fig_{cohort}_proximity_interaction.png",
         vessel_calibre_ecdf="figures/fig_{cohort}_vessel_calibre_ecdf.png",
