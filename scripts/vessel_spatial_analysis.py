@@ -3,8 +3,8 @@
 Reads  : data_{cohort}.parquet
 Writes (one file per figure):
   fig_{cohort}_sdt_ecdf.png                    ECDF of signed distance transform
-  fig_{cohort}_proximity_fractions_stacked.png stacked bar chart of proximity fractions
-  fig_{cohort}_proximity_counts_stacked.png    stacked bar chart of proximity counts (absolute)
+  fig_{cohort}_proximity_fractions_stacked.png stacked bar chart of proximity fractions (subject-level averages)
+  fig_{cohort}_proximity_counts_stacked.png    grouped bar chart of subject-level proximity counts with error bars
   fig_{cohort}_proximity_fractions.png         boxplots of subject-level proximity fractions
   fig_{cohort}_proximity_interaction.png       interaction plots for proximity fractions
   fig_{cohort}_vessel_calibre_ecdf.png         ECDF of estimated vessel diameter
@@ -191,16 +191,47 @@ plt.tight_layout()
 plt.savefig(output_figs["sdt_ecdf"], dpi=150, bbox_inches="tight")
 plt.close(fig)
 
-prop_df = (
-    df.groupby(["treatment", "genotype", "vessel_relation"], observed=True)
+# Compute per-subject fractions then average within each group so that
+# groups with more subjects do not dominate the bar heights.
+subj_stacked_counts = (
+    df.groupby(
+        ["subject", "treatment", "genotype", "vessel_relation"], observed=True
+    )
     .size()
     .rename("n")
     .reset_index()
 )
-prop_df["total"] = prop_df.groupby(
-    ["treatment", "genotype"], observed=True
-)["n"].transform("sum")
-prop_df["fraction"] = prop_df["n"] / prop_df["total"]
+subj_stacked_totals = (
+    df.groupby(["subject", "treatment", "genotype"], observed=True)
+    .size()
+    .rename("n_total")
+    .reset_index()
+)
+subj_stacked_fracs = subj_stacked_counts.merge(
+    subj_stacked_totals, on=["subject", "treatment", "genotype"]
+)
+subj_stacked_fracs["fraction"] = subj_stacked_fracs["n"] / subj_stacked_fracs["n_total"]
+# Pivot to wide then melt so subjects with zero plaques in a category
+# contribute 0 to the group mean rather than being absent.
+subj_stacked_wide = subj_stacked_fracs.pivot_table(
+    index=["subject", "treatment", "genotype"],
+    columns="vessel_relation",
+    values="fraction",
+    fill_value=0.0,
+).reset_index()
+subj_stacked_wide.columns.name = None
+subj_stacked_long = subj_stacked_wide.melt(
+    id_vars=["subject", "treatment", "genotype"],
+    var_name="vessel_relation",
+    value_name="fraction",
+)
+prop_df = (
+    subj_stacked_long.groupby(
+        ["treatment", "genotype", "vessel_relation"], observed=True
+    )["fraction"]
+    .mean()
+    .reset_index()
+)
 prop_df["group"] = (
     prop_df["treatment"].astype(str) + " | " + prop_df["genotype"].astype(str)
 )
@@ -225,7 +256,7 @@ for cat in relation_categories:
     color = PROX_PALETTE.get(cat, "grey")
     ax.bar(groups, vals, bottom=bottoms, label=cat, color=color, width=0.6)
     bottoms += np.array(vals)
-ax.set_ylabel("Fraction of plaques")
+ax.set_ylabel("Mean fraction of plaques per subject")
 ax.set_xlabel("")
 ax.set_xticklabels(groups, rotation=20, ha="right")
 ax.legend(
@@ -234,33 +265,60 @@ ax.legend(
     loc="upper left",
     fontsize=8,
 )
-ax.set_title(f"Plaque\u2013vessel proximity fractions \u2014 {cohort}")
+ax.set_title(f"Plaque\u2013vessel proximity fractions (subject avg) \u2014 {cohort}")
 plt.tight_layout()
 plt.savefig(output_figs["proximity_fractions_stacked"], dpi=150, bbox_inches="tight")
 plt.close(fig)
 
-# ── Stacked bar chart: absolute counts (shared y-axis) ───────────────────────
-count_bottoms = np.zeros(len(groups))
+# ── Grouped bar chart: subject-level counts with error bars ──────────────────
+subj_count_df = (
+    df.groupby(
+        ["subject", "treatment", "genotype", "vessel_relation"], observed=True
+    )
+    .size()
+    .rename("n")
+    .reset_index()
+)
+subj_count_agg = (
+    subj_count_df.groupby(
+        ["treatment", "genotype", "vessel_relation"], observed=True
+    )["n"]
+    .agg(["mean", "sem"])
+    .reset_index()
+)
+subj_count_agg["group"] = (
+    subj_count_agg["treatment"].astype(str)
+    + " | "
+    + subj_count_agg["genotype"].astype(str)
+)
 fig, ax = plt.subplots(figsize=(9, 5))
-for cat in relation_categories:
-    vals = [
-        prop_df.loc[
-            (prop_df["group"] == g) & (prop_df["vessel_relation"] == cat),
-            "n",
-        ].values[0]
-        if len(
-            prop_df.loc[
-                (prop_df["group"] == g) & (prop_df["vessel_relation"] == cat)
-            ]
-        ) > 0
-        else 0
+n_cats = len(relation_categories)
+n_groups = len(groups)
+group_width = 0.8
+bar_width = group_width / n_cats
+x = np.arange(n_groups)
+for i, cat in enumerate(relation_categories):
+    offsets = x + (i - (n_cats - 1) / 2) * bar_width
+    cat_data = subj_count_agg[subj_count_agg["vessel_relation"] == cat]
+    means = [
+        cat_data.loc[cat_data["group"] == g, "mean"].values[0]
+        if g in cat_data["group"].values
+        else np.nan
+        for g in groups
+    ]
+    sems = [
+        cat_data.loc[cat_data["group"] == g, "sem"].values[0]
+        if g in cat_data["group"].values
+        else np.nan
         for g in groups
     ]
     color = PROX_PALETTE.get(cat, "grey")
-    ax.bar(groups, vals, bottom=count_bottoms, label=cat, color=color, width=0.6)
-    count_bottoms += np.array(vals)
-ax.set_ylabel("Number of plaques")
+    ax.bar(offsets, means, width=bar_width, label=cat, color=color)
+    # NaN sems (e.g. single-subject groups) are silently dropped by errorbar
+    ax.errorbar(offsets, means, yerr=sems, fmt="none", color="black", capsize=3)
+ax.set_ylabel("Mean number of plaques per subject")
 ax.set_xlabel("")
+ax.set_xticks(x)
 ax.set_xticklabels(groups, rotation=20, ha="right")
 ax.legend(
     title="Vessel relation",
@@ -268,7 +326,7 @@ ax.legend(
     loc="upper left",
     fontsize=8,
 )
-ax.set_title(f"Plaque\u2013vessel proximity counts \u2014 {cohort}")
+ax.set_title(f"Plaque\u2013vessel proximity counts (subject avg) \u2014 {cohort}")
 plt.tight_layout()
 plt.savefig(output_figs["proximity_counts_stacked"], dpi=150, bbox_inches="tight")
 plt.close(fig)
