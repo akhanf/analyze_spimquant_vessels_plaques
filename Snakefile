@@ -103,6 +103,8 @@ rule regional_analysis:
     input:
         roi_parquet="roi_data_{cohort}.parquet",
         atlas="tpl-ABAv3_seg-all_dseg.nii.gz",
+    params:
+        metric="plaque_density",
     output:
         roi_top_density="figures/fig_{cohort}_roi_top_density.png",
         roi_density_boxplot="figures/fig_{cohort}_roi_density_boxplot.png",

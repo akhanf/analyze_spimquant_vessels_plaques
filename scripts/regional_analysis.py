@@ -188,25 +188,25 @@ roi_mean = (
 # Compute treatment effect: log₂ fold-change (Lecanemab / PBS) for total plaque volume.
 # Regions with the most negative log₂ FC have the largest treatment-driven reduction.
 _treat_med = (
-    roi_df.groupby(["index", "name", "treatment"], observed=True)["total_vol_ml"]
+    roi_df.groupby(["index", "name", "treatment"], observed=True)[snakemake.params.metric]
     .median()
     .reset_index()
-    .pivot_table(index=["index", "name"], columns="treatment", values="total_vol_ml")
+    .pivot_table(index=["index", "name"], columns="treatment", values=snakemake.params.metric)
     .reset_index()
 )
 _treat_med.columns.name = None
-_treat_med["lec_pbs_log2fc_vol"] = np.log2(
+_treat_med["lec_pbs_log2fc"] = np.log2(
     (_treat_med["Lecanemab"] + PSEUDOCOUNT) / (_treat_med["PBS"] + PSEUDOCOUNT)
 )
 roi_mean = roi_mean.merge(
-    _treat_med[["index", "name", "lec_pbs_log2fc_vol"]], on=["index", "name"], how="left"
+    _treat_med[["index", "name", "lec_pbs_log2fc"]], on=["index", "name"], how="left"
 )
 
 top_regions = (
-    roi_mean.nsmallest(TOP_N, "lec_pbs_log2fc_vol")[
+    roi_mean.nsmallest(TOP_N, "lec_pbs_log2fc")[
         ["index", "name", "plaque_density", "plaque_count", "vol_density_ml", "total_vol_ml",
          "mean_diam_um", "frac_inside_vessel", "frac_near_vessel", "frac_far_vessel",
-         "lec_pbs_log2fc_vol"]
+         "lec_pbs_log2fc"]
     ].reset_index(drop=True)
 )
 top_idx = top_regions["index"].tolist()
@@ -214,7 +214,7 @@ roi_top = roi_df.loc[roi_df["index"].isin(top_idx)].copy()
 roi_top["region_abbr"] = roi_top["name"].str.replace(r"^(left|right) ", "", regex=True)
 
 # ── Per-region treatment statistics (CSV) ────────────────────────────────────
-region_stats = compute_region_treatment_stats(roi_df, metric="total_vol_ml")
+region_stats = compute_region_treatment_stats(roi_df, metric=snakemake.params.metric)
 region_stats.to_csv(output_stats_csv, index=False)
 
 
@@ -222,7 +222,7 @@ region_stats.to_csv(output_stats_csv, index=False)
 fig, ax = plt.subplots(figsize=(10, 6))
 ax.barh(
     top_regions["name"],
-    top_regions["lec_pbs_log2fc_vol"],
+    top_regions["lec_pbs_log2fc"],
     color="steelblue", edgecolor="white", height=0.7,
 )
 ax.axvline(0, color="black", linewidth=0.8, linestyle="--")
