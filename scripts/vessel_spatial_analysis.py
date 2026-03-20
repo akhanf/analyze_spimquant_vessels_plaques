@@ -4,7 +4,7 @@ Reads  : data_{cohort}.parquet
 Writes (one file per figure):
   fig_{cohort}_sdt_ecdf.png                    ECDF of signed distance transform
   fig_{cohort}_proximity_fractions_stacked.png stacked bar chart of proximity fractions (subject-level averages)
-  fig_{cohort}_proximity_counts_stacked.png    stacked bar chart of proximity counts (absolute)
+  fig_{cohort}_proximity_counts_stacked.png    grouped bar chart of subject-level proximity counts with error bars
   fig_{cohort}_proximity_fractions.png         boxplots of subject-level proximity fractions
   fig_{cohort}_proximity_interaction.png       interaction plots for proximity fractions
   fig_{cohort}_vessel_calibre_ecdf.png         ECDF of estimated vessel diameter
@@ -270,37 +270,55 @@ plt.tight_layout()
 plt.savefig(output_figs["proximity_fractions_stacked"], dpi=150, bbox_inches="tight")
 plt.close(fig)
 
-# ── Stacked bar chart: absolute counts (shared y-axis) ───────────────────────
-count_df = (
-    df.groupby(["treatment", "genotype", "vessel_relation"], observed=True)
+# ── Grouped bar chart: subject-level counts with error bars ──────────────────
+subj_count_df = (
+    df.groupby(
+        ["subject", "treatment", "genotype", "vessel_relation"], observed=True
+    )
     .size()
     .rename("n")
     .reset_index()
 )
-count_df["group"] = (
-    count_df["treatment"].astype(str) + " | " + count_df["genotype"].astype(str)
+subj_count_agg = (
+    subj_count_df.groupby(
+        ["treatment", "genotype", "vessel_relation"], observed=True
+    )["n"]
+    .agg(["mean", "sem"])
+    .reset_index()
 )
-count_bottoms = np.zeros(len(groups))
+subj_count_agg["group"] = (
+    subj_count_agg["treatment"].astype(str)
+    + " | "
+    + subj_count_agg["genotype"].astype(str)
+)
 fig, ax = plt.subplots(figsize=(9, 5))
-for cat in relation_categories:
-    vals = [
-        count_df.loc[
-            (count_df["group"] == g) & (count_df["vessel_relation"] == cat),
-            "n",
-        ].values[0]
-        if len(
-            count_df.loc[
-                (count_df["group"] == g) & (count_df["vessel_relation"] == cat)
-            ]
-        ) > 0
-        else 0
+n_cats = len(relation_categories)
+n_groups = len(groups)
+group_width = 0.8
+bar_width = group_width / n_cats
+x = np.arange(n_groups)
+for i, cat in enumerate(relation_categories):
+    offsets = x + (i - (n_cats - 1) / 2) * bar_width
+    cat_data = subj_count_agg[subj_count_agg["vessel_relation"] == cat]
+    means = [
+        cat_data.loc[cat_data["group"] == g, "mean"].values[0]
+        if g in cat_data["group"].values
+        else np.nan
+        for g in groups
+    ]
+    sems = [
+        cat_data.loc[cat_data["group"] == g, "sem"].values[0]
+        if g in cat_data["group"].values
+        else np.nan
         for g in groups
     ]
     color = PROX_PALETTE.get(cat, "grey")
-    ax.bar(groups, vals, bottom=count_bottoms, label=cat, color=color, width=0.6)
-    count_bottoms += np.array(vals)
-ax.set_ylabel("Number of plaques")
+    ax.bar(offsets, means, width=bar_width, label=cat, color=color)
+    # NaN sems (e.g. single-subject groups) are silently dropped by errorbar
+    ax.errorbar(offsets, means, yerr=sems, fmt="none", color="black", capsize=3)
+ax.set_ylabel("Mean number of plaques per subject")
 ax.set_xlabel("")
+ax.set_xticks(x)
 ax.set_xticklabels(groups, rotation=20, ha="right")
 ax.legend(
     title="Vessel relation",
@@ -308,7 +326,7 @@ ax.legend(
     loc="upper left",
     fontsize=8,
 )
-ax.set_title(f"Plaque\u2013vessel proximity counts \u2014 {cohort}")
+ax.set_title(f"Plaque\u2013vessel proximity counts (subject avg) \u2014 {cohort}")
 plt.tight_layout()
 plt.savefig(output_figs["proximity_counts_stacked"], dpi=150, bbox_inches="tight")
 plt.close(fig)
