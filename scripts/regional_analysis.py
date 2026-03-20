@@ -2,7 +2,8 @@
 
 Reads  : roi_data_{cohort}.parquet  +  tpl-ABAv3_seg-all_dseg.nii.gz
 Writes (one file per figure):
-  fig_{cohort}_roi_top_density.png         bar chart of top 20 regions by plaque density
+  fig_{cohort}_roi_top_density.png         bar chart of top 20 regions by treatment effect
+                                           (log₂ FC of total plaque volume, Lecanemab / PBS)
   fig_{cohort}_roi_density_boxplot.png     boxplot of density in top regions by treatment
   fig_{cohort}_roi_metric_heatmap.png      multi-metric normalised heatmap
   fig_{cohort}_roi_proximity_fractions.png vessel-proximity fraction boxplots (top regions)
@@ -38,6 +39,8 @@ TREAT_PALETTE = {"PBS": "#4C72B0", "Lecanemab": "#DD8452"}
 GENO_ORDER = ["ApoE3", "ApoE4"]
 GENO_PALETTE = {"ApoE3": "#55A868", "ApoE4": "#C44E52"}
 TOP_N = 20
+# Small constant added to volume values before taking log ratios to avoid log(0).
+PSEUDOCOUNT = 1e-9
 
 
 # ── Helper functions ─────────────────────────────────────────────────────────
@@ -119,7 +122,7 @@ geno_palette = {g: GENO_PALETTE[g] for g in geno_present}
 n_geno = len(geno_present)
 
 METRIC_COLS = [
-    "plaque_count", "plaque_density", "vol_density_ml",
+    "plaque_count", "plaque_density", "vol_density_ml", "total_vol_ml",
     "mean_diam_um", "median_diam_um",
     "mean_sdt_um", "median_sdt_um",
     "frac_inside_vessel", "frac_near_vessel", "frac_far_vessel",
@@ -127,10 +130,29 @@ METRIC_COLS = [
 roi_mean = (
     roi_df.groupby(["index", "name"], observed=True)[METRIC_COLS].mean().reset_index()
 )
+
+# Compute treatment effect: log₂ fold-change (Lecanemab / PBS) for total plaque volume.
+# Regions with the most negative log₂ FC have the largest treatment-driven reduction.
+_treat_med = (
+    roi_df.groupby(["index", "name", "treatment"], observed=True)["total_vol_ml"]
+    .median()
+    .reset_index()
+    .pivot_table(index=["index", "name"], columns="treatment", values="total_vol_ml")
+    .reset_index()
+)
+_treat_med.columns.name = None
+_treat_med["lec_pbs_log2fc_vol"] = np.log2(
+    (_treat_med["Lecanemab"] + PSEUDOCOUNT) / (_treat_med["PBS"] + PSEUDOCOUNT)
+)
+roi_mean = roi_mean.merge(
+    _treat_med[["index", "name", "lec_pbs_log2fc_vol"]], on=["index", "name"], how="left"
+)
+
 top_regions = (
-    roi_mean.nlargest(TOP_N, "plaque_density")[
-        ["index", "name", "plaque_density", "plaque_count", "vol_density_ml",
-         "mean_diam_um", "frac_inside_vessel", "frac_near_vessel", "frac_far_vessel"]
+    roi_mean.nsmallest(TOP_N, "lec_pbs_log2fc_vol")[
+        ["index", "name", "plaque_density", "plaque_count", "vol_density_ml", "total_vol_ml",
+         "mean_diam_um", "frac_inside_vessel", "frac_near_vessel", "frac_far_vessel",
+         "lec_pbs_log2fc_vol"]
     ].reset_index(drop=True)
 )
 top_idx = top_regions["index"].tolist()
@@ -142,11 +164,14 @@ roi_top["region_abbr"] = roi_top["name"].str.replace(r"^(left|right) ", "", rege
 fig, ax = plt.subplots(figsize=(10, 6))
 ax.barh(
     top_regions["name"],
-    top_regions["plaque_density"],
+    top_regions["lec_pbs_log2fc_vol"],
     color="steelblue", edgecolor="white", height=0.7,
 )
-ax.set_xlabel("Mean plaque density (plaques / mm\u00b3)")
-ax.set_title(f"Top {TOP_N} regions by plaque density \u2014 {cohort}")
+ax.axvline(0, color="black", linewidth=0.8, linestyle="--")
+ax.set_xlabel("log\u2082 fold-change total plaque volume (Lecanemab / PBS)")
+ax.set_title(
+    f"Top {TOP_N} regions by treatment effect on total plaque volume \u2014 {cohort}"
+)
 ax.invert_yaxis()
 plt.tight_layout()
 plt.savefig(output_figs["roi_top_density"], dpi=150)
