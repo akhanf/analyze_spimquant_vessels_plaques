@@ -233,7 +233,7 @@ vabs = np.nanmax(np.abs(log_fc))
 if not np.isfinite(vabs):
     vabs = 1.0
 fig, ax = plt.subplots(figsize=(4 + 2 * n_geno, 8))
-im = ax.imshow(log_fc, cmap="RdBu", aspect="auto", vmin=-vabs, vmax=vabs)
+im = ax.imshow(log_fc, cmap="coolwarm", aspect="auto", vmin=-vabs, vmax=vabs)
 ax.set_xticks(range(len(fc_df.columns)))
 ax.set_xticklabels(fc_df.columns, fontsize=11)
 ax.set_yticks(range(len(fc_df)))
@@ -335,7 +335,7 @@ for gi, geno in enumerate(geno_present):
         ax = axes_grid[gi, pi]
         masked = np.ma.masked_invalid(proj)
         im = ax.imshow(
-            masked.T, origin="lower", cmap="RdBu",
+            masked.T, origin="lower", cmap="coolwarm",
             vmin=-vabs_global, vmax=vabs_global, interpolation="nearest",
         )
         ax.axis("off")
