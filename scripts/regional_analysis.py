@@ -2,7 +2,8 @@
 
 Reads  : roi_data_{cohort}.parquet  +  tpl-ABAv3_seg-all_dseg.nii.gz
 Writes (one file per figure):
-  fig_{cohort}_roi_top_density.png         bar chart of top 20 regions by plaque density
+  fig_{cohort}_roi_top_density.png         bar chart of top 20 regions by treatment effect
+                                           (log₂ FC of total plaque volume, Lecanemab / PBS)
   fig_{cohort}_roi_density_boxplot.png     boxplot of density in top regions by treatment
   fig_{cohort}_roi_metric_heatmap.png      multi-metric normalised heatmap
   fig_{cohort}_roi_proximity_fractions.png vessel-proximity fraction boxplots (top regions)
@@ -12,6 +13,9 @@ Writes (one file per figure):
   fig_{cohort}_atlas_fold_change.png       atlas MIPs coloured by log₂ fold-change
   fig_{cohort}_atlas_mean_diam.png         atlas MIP coloured by mean plaque diameter
   fig_{cohort}_atlas_frac_inside.png       atlas MIP coloured by fraction inside vessel
+Writes (CSV):
+  {cohort}_roi_treatment_stats.csv         per-region t-test stats (total plaque volume,
+                                           Lecanemab vs PBS) with FDR-corrected p-values
 """
 
 import warnings
@@ -23,12 +27,15 @@ import nibabel as nib  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 import seaborn as sns  # noqa: E402
+from scipy import stats  # noqa: E402
+from statsmodels.stats.multitest import fdrcorrection  # noqa: E402
 
 warnings.filterwarnings("ignore")
 
 input_roi = str(snakemake.input.roi_parquet)  # noqa: F821
 input_atlas = str(snakemake.input.atlas)  # noqa: F821
 output_figs = dict(snakemake.output)  # noqa: F821
+output_stats_csv = str(snakemake.output.roi_treatment_stats)  # noqa: F821
 cohort = snakemake.wildcards.cohort  # noqa: F821
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -38,6 +45,9 @@ TREAT_PALETTE = {"PBS": "#4C72B0", "Lecanemab": "#DD8452"}
 GENO_ORDER = ["ApoE3", "ApoE4"]
 GENO_PALETTE = {"ApoE3": "#55A868", "ApoE4": "#C44E52"}
 TOP_N = 20
+# Small constant added to volume values before taking log ratios to avoid log(0).
+PSEUDOCOUNT = 1e-9
+FDR_ALPHA = 0.05
 
 
 # ── Helper functions ─────────────────────────────────────────────────────────
@@ -106,6 +116,53 @@ def roi_fold_change(roi_df, metric="plaque_density", top_idx=None, top_regions=N
     return pd.DataFrame(rows).pivot(index="name", columns="genotype", values="fold_change")
 
 
+def compute_region_treatment_stats(roi_df, metric="total_vol_ml"):
+    """Return per-region t-test statistics (Lecanemab vs PBS) with FDR correction.
+
+    For each region, an independent two-sample t-test is run on ``metric``
+    between the Lecanemab and PBS groups across all subjects.  Benjamini-
+    Hochberg FDR correction is applied across all tested regions.
+    """
+    rows = []
+    for (ridx, name), grp in roi_df.groupby(["index", "name"], observed=True):
+        pbs = grp.loc[grp["treatment"] == "PBS", metric].dropna().values
+        lec = grp.loc[grp["treatment"] == "Lecanemab", metric].dropna().values
+        n_pbs, n_lec = len(pbs), len(lec)
+        mean_pbs = float(np.mean(pbs)) if n_pbs > 0 else np.nan
+        mean_lec = float(np.mean(lec)) if n_lec > 0 else np.nan
+        median_pbs = float(np.median(pbs)) if n_pbs > 0 else np.nan
+        median_lec = float(np.median(lec)) if n_lec > 0 else np.nan
+        log2fc = np.log2(
+            (mean_lec + PSEUDOCOUNT) / (mean_pbs + PSEUDOCOUNT)
+        ) if (n_pbs > 0 and n_lec > 0) else np.nan
+        if n_pbs >= 2 and n_lec >= 2:
+            t_stat, p_val = stats.ttest_ind(lec, pbs, equal_var=False)
+        else:
+            t_stat, p_val = np.nan, np.nan
+        rows.append({
+            "index": ridx,
+            "name": name,
+            "n_PBS": n_pbs,
+            "n_Lecanemab": n_lec,
+            "mean_PBS": mean_pbs,
+            "mean_Lecanemab": mean_lec,
+            "median_PBS": median_pbs,
+            "median_Lecanemab": median_lec,
+            "log2fc_Lec_over_PBS": log2fc,
+            "t_stat": t_stat,
+            "p_value": p_val,
+        })
+    df_stats = pd.DataFrame(rows)
+    # FDR correction (Benjamini-Hochberg) over all regions with a valid p-value
+    valid = df_stats["p_value"].notna()
+    fdr = np.full(len(df_stats), np.nan)
+    if valid.any():
+        _, fdr_vals = fdrcorrection(df_stats.loc[valid, "p_value"].values, alpha=FDR_ALPHA)
+        fdr[valid.values] = fdr_vals
+    df_stats["p_value_fdr"] = fdr
+    return df_stats.sort_values("p_value_fdr").reset_index(drop=True)
+
+
 # ── Load data ─────────────────────────────────────────────────────────────────
 roi_df_raw = pd.read_parquet(input_roi)
 atlas_img = nib.load(input_atlas)
@@ -119,7 +176,7 @@ geno_palette = {g: GENO_PALETTE[g] for g in geno_present}
 n_geno = len(geno_present)
 
 METRIC_COLS = [
-    "plaque_count", "plaque_density", "vol_density_ml",
+    "plaque_count", "plaque_density", "vol_density_ml", "total_vol_ml",
     "mean_diam_um", "median_diam_um",
     "mean_sdt_um", "median_sdt_um",
     "frac_inside_vessel", "frac_near_vessel", "frac_far_vessel",
@@ -127,26 +184,52 @@ METRIC_COLS = [
 roi_mean = (
     roi_df.groupby(["index", "name"], observed=True)[METRIC_COLS].mean().reset_index()
 )
+
+# Compute treatment effect: log₂ fold-change (Lecanemab / PBS) for total plaque volume.
+# Regions with the most negative log₂ FC have the largest treatment-driven reduction.
+_treat_med = (
+    roi_df.groupby(["index", "name", "treatment"], observed=True)[snakemake.params.metric]
+    .median()
+    .reset_index()
+    .pivot_table(index=["index", "name"], columns="treatment", values=snakemake.params.metric)
+    .reset_index()
+)
+_treat_med.columns.name = None
+_treat_med["lec_pbs_log2fc"] = np.log2(
+    (_treat_med["Lecanemab"] + PSEUDOCOUNT) / (_treat_med["PBS"] + PSEUDOCOUNT)
+)
+roi_mean = roi_mean.merge(
+    _treat_med[["index", "name", "lec_pbs_log2fc"]], on=["index", "name"], how="left"
+)
+
 top_regions = (
-    roi_mean.nlargest(TOP_N, "plaque_density")[
-        ["index", "name", "plaque_density", "plaque_count", "vol_density_ml",
-         "mean_diam_um", "frac_inside_vessel", "frac_near_vessel", "frac_far_vessel"]
+    roi_mean.nsmallest(TOP_N, "lec_pbs_log2fc")[
+        ["index", "name", "plaque_density", "plaque_count", "vol_density_ml", "total_vol_ml",
+         "mean_diam_um", "frac_inside_vessel", "frac_near_vessel", "frac_far_vessel",
+         "lec_pbs_log2fc"]
     ].reset_index(drop=True)
 )
 top_idx = top_regions["index"].tolist()
 roi_top = roi_df.loc[roi_df["index"].isin(top_idx)].copy()
 roi_top["region_abbr"] = roi_top["name"].str.replace(r"^(left|right) ", "", regex=True)
 
+# ── Per-region treatment statistics (CSV) ────────────────────────────────────
+region_stats = compute_region_treatment_stats(roi_df, metric=snakemake.params.metric)
+region_stats.to_csv(output_stats_csv, index=False)
+
 
 # ── Figure dispatch ───────────────────────────────────────────────────────────
 fig, ax = plt.subplots(figsize=(10, 6))
 ax.barh(
     top_regions["name"],
-    top_regions["plaque_density"],
+    top_regions["lec_pbs_log2fc"],
     color="steelblue", edgecolor="white", height=0.7,
 )
-ax.set_xlabel("Mean plaque density (plaques / mm\u00b3)")
-ax.set_title(f"Top {TOP_N} regions by plaque density \u2014 {cohort}")
+ax.axvline(0, color="black", linewidth=0.8, linestyle="--")
+ax.set_xlabel("log\u2082 fold-change total plaque volume (Lecanemab / PBS)")
+ax.set_title(
+    f"Top {TOP_N} regions by treatment effect on total plaque volume \u2014 {cohort}"
+)
 ax.invert_yaxis()
 plt.tight_layout()
 plt.savefig(output_figs["roi_top_density"], dpi=150)

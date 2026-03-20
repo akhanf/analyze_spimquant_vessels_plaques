@@ -36,6 +36,10 @@ REGIONAL_FIGS = [
     "atlas_frac_inside",
 ]
 
+REGIONAL_CSVS = [
+    "roi_treatment_stats",
+]
+
 TREATMENT_FIGS = [
     "boxplots_treatment_genotype",
     "violin_plaque_size",
@@ -65,6 +69,7 @@ rule all:
     input:
         expand("roi_data_{cohort}.parquet", cohort=COHORTS),
         expand("figures/fig_{cohort}_{fig}.png", cohort=COHORTS, fig=ALL_FIGS),
+        expand("{cohort}_{csv}.csv", cohort=COHORTS, csv=REGIONAL_CSVS),
 
 
 
@@ -98,6 +103,8 @@ rule regional_analysis:
     input:
         roi_parquet="roi_data_{cohort}.parquet",
         atlas="tpl-ABAv3_seg-all_dseg.nii.gz",
+    params:
+        metric="plaque_density",
     output:
         roi_top_density="figures/fig_{cohort}_roi_top_density.png",
         roi_density_boxplot="figures/fig_{cohort}_roi_density_boxplot.png",
@@ -109,6 +116,7 @@ rule regional_analysis:
         atlas_fold_change="figures/fig_{cohort}_atlas_fold_change.png",
         atlas_mean_diam="figures/fig_{cohort}_atlas_mean_diam.png",
         atlas_frac_inside="figures/fig_{cohort}_atlas_frac_inside.png",
+        roi_treatment_stats="{cohort}_roi_treatment_stats.csv",
     log:
         "logs/regional_analysis_{cohort}.log",
     script:
