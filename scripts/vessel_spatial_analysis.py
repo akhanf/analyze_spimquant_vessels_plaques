@@ -11,6 +11,7 @@ Writes (one file per figure):
   fig_{cohort}_vessel_calibre_subject.png      subject-level boxplots of vessel calibre
   fig_{cohort}_vessel_diam_bins.png            fractions by vessel diameter bin
   fig_{cohort}_spatial_vessel_proximity.png    2-D scatter coloured by vessel relation
+  fig_{cohort}_proximity_size_hexbin.png       joint hexbin of vessel proximity × plaque size by treatment
 """
 
 import warnings
@@ -18,6 +19,7 @@ import warnings
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 import seaborn as sns  # noqa: E402
@@ -550,3 +552,105 @@ fig.suptitle(
 plt.tight_layout()
 plt.savefig(output_figs["spatial_vessel_proximity"], dpi=150, bbox_inches="tight")
 plt.close(fig)
+
+# ── Proximity × plaque-size joint hexbin (by treatment) ─────────────────────
+HEXBIN_PROX_CUTS = [-np.inf, 0, 5, 10, 15, np.inf]
+HEXBIN_PROX_LABELS = [
+    "\u22640\u00a0\u00b5m",
+    "0\u20135\u00a0\u00b5m",
+    "5\u201310\u00a0\u00b5m",
+    "10\u201315\u00a0\u00b5m",
+    "\u226515\u00a0\u00b5m",
+]
+N_HEXBIN_PROX = len(HEXBIN_PROX_LABELS)
+N_HEXBIN_SIZE = 5
+HEXBIN_CMAPS = {"PBS": "Blues", "Lecanemab": "Oranges"}
+
+size_col = "equiv_diam_um"
+_, size_bin_edges = pd.qcut(
+    df[size_col], q=N_HEXBIN_SIZE, retbins=True, duplicates="drop"
+)
+size_bin_labels_hex = [
+    f"{size_bin_edges[i]:.1f}\u2013{size_bin_edges[i + 1]:.1f}\u00a0\u00b5m"
+    for i in range(len(size_bin_edges) - 1)
+]
+
+df["hex_prox_bin"] = pd.cut(
+    df["sdt_CD31_um"],
+    bins=HEXBIN_PROX_CUTS,
+    labels=HEXBIN_PROX_LABELS,
+    include_lowest=True,
+    right=True,
+)
+df["hex_size_bin"] = pd.qcut(
+    df[size_col],
+    q=N_HEXBIN_SIZE,
+    labels=size_bin_labels_hex,
+    duplicates="drop",
+)
+df["hex_prox_code"] = df["hex_prox_bin"].cat.codes.astype(float)
+df["hex_size_code"] = df["hex_size_bin"].cat.codes.astype(float)
+df.loc[df["hex_prox_code"] < 0, "hex_prox_code"] = np.nan
+df.loc[df["hex_size_code"] < 0, "hex_size_code"] = np.nan
+
+n_size_bins = len(size_bin_labels_hex)
+fig_hex = plt.figure(figsize=(16, 8))
+outer_gs = GridSpec(1, 2, figure=fig_hex, wspace=0.4)
+for col_idx, treatment in enumerate(TREAT_ORDER):
+    treat_data = df.loc[
+        df["treatment"] == treatment
+    ].dropna(subset=["hex_prox_code", "hex_size_code"])
+    color = TREAT_PALETTE[treatment]
+    cmap = HEXBIN_CMAPS.get(treatment, "Blues")
+
+    inner_gs = GridSpecFromSubplotSpec(
+        2, 2,
+        subplot_spec=outer_gs[col_idx],
+        height_ratios=[1, 4],
+        width_ratios=[4, 1],
+        hspace=0.05,
+        wspace=0.05,
+    )
+    ax_top = fig_hex.add_subplot(inner_gs[0, 0])
+    ax_main = fig_hex.add_subplot(inner_gs[1, 0])
+    ax_right = fig_hex.add_subplot(inner_gs[1, 1])
+    ax_corner = fig_hex.add_subplot(inner_gs[0, 1])
+    ax_corner.set_visible(False)
+
+    hb = ax_main.hexbin(
+        treat_data["hex_prox_code"],
+        treat_data["hex_size_code"],
+        gridsize=(N_HEXBIN_PROX, n_size_bins),
+        cmap=cmap,
+        mincnt=1,
+        extent=(-0.5, N_HEXBIN_PROX - 0.5, -0.5, n_size_bins - 0.5),
+    )
+    plt.colorbar(hb, ax=ax_main, label="Count", shrink=0.8)
+    ax_main.set_xticks(range(N_HEXBIN_PROX))
+    ax_main.set_xticklabels(HEXBIN_PROX_LABELS, fontsize=8, rotation=30, ha="right")
+    ax_main.set_yticks(range(n_size_bins))
+    ax_main.set_yticklabels(size_bin_labels_hex, fontsize=8)
+    ax_main.set_xlabel("Vessel proximity")
+    ax_main.set_ylabel("Plaque size (equiv. diam. \u00b5m)")
+
+    prox_counts = treat_data["hex_prox_code"].value_counts().sort_index()
+    ax_top.bar(prox_counts.index, prox_counts.values, color=color, alpha=0.8, width=0.8)
+    ax_top.set_xlim(-0.5, N_HEXBIN_PROX - 0.5)
+    ax_top.set_xticks([])
+    ax_top.set_ylabel("Count", fontsize=8)
+    ax_top.set_title(treatment, fontsize=12, fontweight="bold")
+    ax_top.tick_params(axis="y", labelsize=8)
+
+    size_counts = treat_data["hex_size_code"].value_counts().sort_index()
+    ax_right.barh(size_counts.index, size_counts.values, color=color, alpha=0.8, height=0.8)
+    ax_right.set_ylim(-0.5, n_size_bins - 0.5)
+    ax_right.set_yticks([])
+    ax_right.set_xlabel("Count", fontsize=8)
+    ax_right.tick_params(axis="x", labelsize=8)
+
+fig_hex.suptitle(
+    f"Vessel proximity \u00d7 plaque size joint distribution by treatment \u2014 {cohort}",
+    fontsize=13,
+)
+plt.savefig(output_figs["proximity_size_hexbin"], dpi=150, bbox_inches="tight")
+plt.close(fig_hex)

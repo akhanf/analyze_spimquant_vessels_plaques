@@ -59,6 +59,7 @@ VESSEL_FIGS = [
     "vessel_calibre_subject",
     "vessel_diam_bins",
     "spatial_vessel_proximity",
+    "proximity_size_hexbin",
 ]
 
 ALL_FIGS = REGIONAL_FIGS + TREATMENT_FIGS + VESSEL_FIGS
@@ -165,6 +166,7 @@ rule vessel_analysis:
         vessel_calibre_subject="figures/fig_{cohort}_vessel_calibre_subject.png",
         vessel_diam_bins="figures/fig_{cohort}_vessel_diam_bins.png",
         spatial_vessel_proximity="figures/fig_{cohort}_spatial_vessel_proximity.png",
+        proximity_size_hexbin="figures/fig_{cohort}_proximity_size_hexbin.png",
     log:
         "logs/vessel_analysis_{cohort}.log",
     script:
