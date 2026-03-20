@@ -6,4 +6,9 @@ datasets:
     participant_tsv: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_batch3/bids/participants.tsv
     spimquant_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_batch3/derivatives/spimquant-v0.6.0rc2_84a605e_ozx
 
+template_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_batch3/derivatives/spimquant-v0.6.0rc2_84a605e_ozx/tpl-ABAv3
+segs:
+  - roi82
+  - roi198
+  - all
 

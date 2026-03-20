@@ -67,18 +67,29 @@ ALL_FIGS = REGIONAL_FIGS + TREATMENT_FIGS + VESSEL_FIGS
 # ── Default target ────────────────────────────────────────────────────────────
 rule all:
     input:
-        expand("roi_data_{cohort}.parquet", cohort=COHORTS),
-        expand("figures/fig_{cohort}_{fig}.png", cohort=COHORTS, fig=ALL_FIGS),
+        expand("roi_data_{cohort}_seg-{seg}.parquet", cohort=COHORTS, seg=config['segs']),
+        expand("figures/fig_{cohort}_{seg}_{fig}.png", cohort=COHORTS, fig=REGIONAL_FIGS, seg=config['segs']),
+        expand("figures/fig_{cohort}_{fig}.png", cohort=COHORTS, fig=TREATMENT_FIGS + VESSEL_FIGS),
         expand("{cohort}_{csv}.csv", cohort=COHORTS, csv=REGIONAL_CSVS),
 
 
+rule add_vol_to_dseg_tsv:
+    input:
+        lut=lambda wildcards: Path(config['template_dir']) / "seg-{seg}_tpl-ABAv3_dseg.tsv",
+        nii=lambda wildcards: Path(config['template_dir']) / "seg-{seg}_tpl-ABAv3_dseg.nii.gz",
+    output:
+        lut="tpl-ABAv3_seg-{seg}_dseg.tsv"
+    script:
+        "scripts/calc_dseg_volumes.py"
+
 
 rule import_data:
+    input:
+        participant_tsv=lambda wc: config.get("datasets", {}).get(wc.cohort, {}).get("participant_tsv", ""),
+        spimquant_dir=lambda wc: config.get("datasets", {}).get(wc.cohort, {}).get("spimquant_dir", ""),
     output:
         "data_{cohort}.parquet",
     params:
-        participant_tsv=lambda wc: config.get("datasets", {}).get(wc.cohort, {}).get("participant_tsv", ""),
-        spimquant_dir=lambda wc: config.get("datasets", {}).get(wc.cohort, {}).get("spimquant_dir", ""),
     log:
         "logs/import_data_{cohort}.log",
     script:
@@ -89,11 +100,11 @@ rule import_data:
 rule regional_dataframe:
     input:
         parquet="data_{cohort}.parquet",
-        lut="tpl-ABAv3_seg-all_dseg.tsv",
+        lut="tpl-ABAv3_seg-{seg}_dseg.tsv"
     output:
-        "roi_data_{cohort}.parquet",
+        "roi_data_{cohort}_seg-{seg}.parquet",
     log:
-        "logs/regional_dataframe_{cohort}.log",
+        "logs/regional_dataframe_{cohort}_{seg}.log",
     script:
         "scripts/regional_dataframe.py"
 
@@ -101,24 +112,24 @@ rule regional_dataframe:
 # ── Regional / atlas figures ──────────────────────────────────────────────────
 rule regional_analysis:
     input:
-        roi_parquet="roi_data_{cohort}.parquet",
-        atlas="tpl-ABAv3_seg-all_dseg.nii.gz",
+        roi_parquet="roi_data_{cohort}_seg-{seg}.parquet",
+        atlas=lambda wildcards: Path(config['datasets'][wildcards.cohort]['spimquant_dir']) / "tpl-ABAv3"  / "seg-{seg}_tpl-ABAv3_dseg.nii.gz",
     params:
         metric="plaque_density",
     output:
-        roi_top_density="figures/fig_{cohort}_roi_top_density.png",
-        roi_density_boxplot="figures/fig_{cohort}_roi_density_boxplot.png",
-        roi_metric_heatmap="figures/fig_{cohort}_roi_metric_heatmap.png",
-        roi_proximity_fractions="figures/fig_{cohort}_roi_proximity_fractions.png",
-        roi_fold_change="figures/fig_{cohort}_roi_fold_change.png",
-        atlas_density_all="figures/fig_{cohort}_atlas_density_all.png",
-        atlas_density_groups="figures/fig_{cohort}_atlas_density_groups.png",
-        atlas_fold_change="figures/fig_{cohort}_atlas_fold_change.png",
-        atlas_mean_diam="figures/fig_{cohort}_atlas_mean_diam.png",
-        atlas_frac_inside="figures/fig_{cohort}_atlas_frac_inside.png",
-        roi_treatment_stats="{cohort}_roi_treatment_stats.csv",
+        roi_top_density="figures/fig_{cohort}_{seg}_roi_top_density.png",
+        roi_density_boxplot="figures/fig_{cohort}_{seg}_roi_density_boxplot.png",
+        roi_metric_heatmap="figures/fig_{cohort}_{seg}_roi_metric_heatmap.png",
+        roi_proximity_fractions="figures/fig_{cohort}_{seg}_roi_proximity_fractions.png",
+        roi_fold_change="figures/fig_{cohort}_{seg}_roi_fold_change.png",
+        atlas_density_all="figures/fig_{cohort}_{seg}_atlas_density_all.png",
+        atlas_density_groups="figures/fig_{cohort}_{seg}_atlas_density_groups.png",
+        atlas_fold_change="figures/fig_{cohort}_{seg}_atlas_fold_change.png",
+        atlas_mean_diam="figures/fig_{cohort}_{seg}_atlas_mean_diam.png",
+        atlas_frac_inside="figures/fig_{cohort}_{seg}_atlas_frac_inside.png",
+        roi_treatment_stats="{cohort}_{seg}_roi_treatment_stats.csv",
     log:
-        "logs/regional_analysis_{cohort}.log",
+        "logs/regional_analysis_{cohort}_{seg}.log",
     script:
         "scripts/regional_analysis.py"
 

@@ -13,8 +13,8 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-participant_tsv = snakemake.params.participant_tsv  # noqa: F821
-spimquant_dir = snakemake.params.spimquant_dir  # noqa: F821
+participant_tsv = snakemake.input.participant_tsv  # noqa: F821
+spimquant_dir = snakemake.input.spimquant_dir  # noqa: F821
 output_parquet = str(snakemake.output[0])  # noqa: F821
 cohort = snakemake.wildcards.cohort  # noqa: F821
 
