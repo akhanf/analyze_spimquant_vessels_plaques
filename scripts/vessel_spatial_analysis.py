@@ -11,6 +11,9 @@ Writes (one file per figure):
   fig_{cohort}_vessel_calibre_subject.png      subject-level boxplots of vessel calibre
   fig_{cohort}_vessel_diam_bins.png            fractions by vessel diameter bin
   fig_{cohort}_spatial_vessel_proximity.png    2-D scatter coloured by vessel relation
+  fig_{cohort}_spatial_plaques_size.png        XY/XZ projections with marker size ∝ equiv. diameter (mm)
+  fig_{cohort}_spatial_plaques_vessel_dist_bins.png  XY/XZ projections filtered by 3 vessel-distance bins
+  fig_{cohort}_spatial_plaques_vessel_dist_anim.gif  animated sweep through vessel-distance window
 """
 
 import warnings
@@ -18,9 +21,11 @@ import warnings
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.lines as mlines  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 import seaborn as sns  # noqa: E402
+from matplotlib.animation import FuncAnimation, PillowWriter  # noqa: E402
 from statsmodels.formula.api import ols  # noqa: E402
 from statsmodels.stats.anova import anova_lm  # noqa: E402
 
@@ -550,3 +555,222 @@ fig.suptitle(
 plt.tight_layout()
 plt.savefig(output_figs["spatial_vessel_proximity"], dpi=150, bbox_inches="tight")
 plt.close(fig)
+
+# ── Figure: XY / XZ projections with marker size ∝ equiv. diameter (mm) ─────
+# Build ordered list of (treatment, genotype) groups present in the data.
+group_list = [
+    (t, g)
+    for t in TREAT_ORDER
+    for g in GENO_ORDER
+    if ((df["treatment"] == t) & (df["genotype"] == g)).any()
+]
+n_groups = len(group_list)
+
+df["equiv_diam_mm"] = df["equiv_diam_um"] / 1000.0
+
+# Cap extreme diameters for display (99th percentile) to avoid single huge dots
+diam_cap_mm = df["equiv_diam_mm"].quantile(0.99)
+df["equiv_diam_mm_capped"] = df["equiv_diam_mm"].clip(upper=diam_cap_mm)
+# Marker area ∝ (diameter_mm)²; scale so median maps to ~10 pt²
+_median_diam = df["equiv_diam_mm_capped"].median()
+DIAM_SCALE = 10.0 / (_median_diam ** 2) if _median_diam > 0 else 1.0
+df["s_marker"] = (df["equiv_diam_mm_capped"] ** 2) * DIAM_SCALE
+
+PROJECTIONS = [
+    ("template_x", "template_y", "XY"),
+    ("template_x", "template_z", "XZ"),
+]
+N_SAMPLE_GROUP = 5_000  # per-group sample for clarity
+
+fig, axes = plt.subplots(
+    2, n_groups, figsize=(4.5 * n_groups, 8), squeeze=False
+)
+for col_idx, (treat, geno) in enumerate(group_list):
+    mask = (df["treatment"] == treat) & (df["genotype"] == geno)
+    subset = df.loc[mask].sample(
+        min(N_SAMPLE_GROUP, int(mask.sum())), random_state=42
+    )
+    color = TREAT_PALETTE[treat]
+    for row_idx, (xcol, ycol, proj_label) in enumerate(PROJECTIONS):
+        ax = axes[row_idx, col_idx]
+        ax.scatter(
+            subset[xcol], subset[ycol],
+            s=subset["s_marker"], c=color, alpha=0.35, linewidths=0,
+        )
+        ax.set_aspect("equal")
+        ax.set_xlabel(xcol.replace("template_", "").upper() + " (mm)")
+        ax.set_ylabel(ycol.replace("template_", "").upper() + " (mm)")
+        if row_idx == 0:
+            ax.set_title(f"{treat} / {geno}\n{proj_label}", fontsize=9)
+        else:
+            ax.set_title(proj_label, fontsize=9)
+
+# Size legend: show 3 representative diameters
+legend_diams_mm = [
+    df["equiv_diam_mm_capped"].quantile(0.25),
+    df["equiv_diam_mm_capped"].median(),
+    diam_cap_mm,
+]
+legend_handles = [
+    mlines.Line2D(
+        [], [], linestyle="none", marker="o",
+        markerfacecolor="grey", markeredgecolor="none", alpha=0.6,
+        markersize=np.sqrt((d ** 2) * DIAM_SCALE),
+        label=f"{d * 1000:.0f} \u00b5m",
+    )
+    for d in legend_diams_mm
+]
+axes[0, -1].legend(
+    handles=legend_handles, title="Equiv. diam.", fontsize=8,
+    loc="upper right",
+)
+fig.suptitle(
+    f"Plaque projections (size \u221d equiv. diameter) \u2014 {cohort}"
+    f"  (n\u2264{N_SAMPLE_GROUP:,}/group)",
+    fontsize=13,
+)
+plt.tight_layout()
+plt.savefig(output_figs["spatial_plaques_size"], dpi=150, bbox_inches="tight")
+plt.close(fig)
+
+# ── Figure: XY / XZ projections filtered by 3 vessel-distance bins ───────────
+SDT_BIN_EDGES_UM = [-np.inf, 0.0, 50.0, np.inf]
+SDT_BIN_LABELS_UM = [
+    "< 0 \u00b5m (inside vessel)",
+    "0\u201350 \u00b5m (near vessel)",
+    "\u2265 50 \u00b5m (far from vessel)",
+]
+SDT_BIN_COLORS = ["#C44E52", "#DD8452", "#4C72B0"]
+
+df["sdt_dist_bin"] = pd.cut(
+    df["sdt_CD31_um"],
+    bins=SDT_BIN_EDGES_UM,
+    labels=SDT_BIN_LABELS_UM,
+    include_lowest=True,
+    right=True,
+)
+n_sdt_bins = len(SDT_BIN_LABELS_UM)
+
+fig, axes = plt.subplots(
+    n_sdt_bins * 2, n_groups,
+    figsize=(4.0 * n_groups, 4.0 * n_sdt_bins),
+    squeeze=False,
+)
+for col_idx, (treat, geno) in enumerate(group_list):
+    mask = (df["treatment"] == treat) & (df["genotype"] == geno)
+    group_df = df.loc[mask]
+    for bin_idx, (bin_label, bin_color) in enumerate(
+        zip(SDT_BIN_LABELS_UM, SDT_BIN_COLORS)
+    ):
+        bin_subset = group_df.loc[group_df["sdt_dist_bin"] == bin_label]
+        bin_sample = bin_subset.sample(
+            min(N_SAMPLE_GROUP, len(bin_subset)), random_state=42
+        )
+        for proj_idx, (xcol, ycol, proj_label) in enumerate(PROJECTIONS):
+            row_idx = bin_idx * 2 + proj_idx
+            ax = axes[row_idx, col_idx]
+            ax.scatter(
+                bin_sample[xcol], bin_sample[ycol],
+                s=4, c=bin_color, alpha=0.3, linewidths=0,
+            )
+            ax.set_aspect("equal")
+            ax.set_xlabel(xcol.replace("template_", "").upper() + " (mm)")
+            ax.set_ylabel(ycol.replace("template_", "").upper() + " (mm)")
+            if col_idx == 0:
+                ax.set_ylabel(
+                    f"{bin_label}\n"
+                    + ycol.replace("template_", "").upper() + " (mm)"
+                )
+            if bin_idx == 0 and proj_idx == 0:
+                ax.set_title(f"{treat} / {geno}\n{proj_label}", fontsize=9)
+            else:
+                ax.set_title(proj_label, fontsize=9)
+            n_shown = len(bin_sample)
+            ax.text(
+                0.02, 0.97, f"n={n_shown:,}",
+                transform=ax.transAxes, fontsize=7,
+                va="top", ha="left", color="black",
+            )
+fig.suptitle(
+    f"Plaque projections by vessel-distance bin \u2014 {cohort}",
+    fontsize=13,
+)
+plt.tight_layout()
+plt.savefig(
+    output_figs["spatial_plaques_vessel_dist_bins"], dpi=150, bbox_inches="tight"
+)
+plt.close(fig)
+
+# ── Animated figure: sliding vessel-distance window sweep ────────────────────
+ANIM_WIN_UM = 25.0        # window width in µm
+ANIM_STEP_UM = 5.0        # step size between frames
+ANIM_FPS = 8              # frames per second
+# Constrain animation to the biological range of interest; clamp to ±50 / 130 µm
+# to exclude rare extreme outliers while still covering the full vessel-distance
+# distribution (inside vessel → far from vessel).
+ANIM_SDT_MIN = max(float(df["sdt_CD31_um"].min()), -50.0)
+ANIM_SDT_MAX = min(float(df["sdt_CD31_um"].max()), 130.0)
+N_ANIM_SAMPLE = 2_000     # max points per group per frame
+
+frame_starts = np.arange(ANIM_SDT_MIN, ANIM_SDT_MAX - ANIM_WIN_UM + ANIM_STEP_UM, ANIM_STEP_UM)
+
+# Pre-compute axis limits from the full dataset
+_xlim = (df["template_x"].quantile(0.01), df["template_x"].quantile(0.99))
+_ylim_xy = (df["template_y"].quantile(0.01), df["template_y"].quantile(0.99))
+_ylim_xz = (df["template_z"].quantile(0.01), df["template_z"].quantile(0.99))
+
+fig_anim, axes_anim = plt.subplots(
+    2, n_groups, figsize=(4.0 * n_groups, 7.0), squeeze=False
+)
+# Initialise empty scatter objects and store metadata
+_scat_info = {}
+for col_idx, (treat, geno) in enumerate(group_list):
+    for row_idx, (xcol, ycol, proj_label) in enumerate(PROJECTIONS):
+        ax = axes_anim[row_idx, col_idx]
+        sc = ax.scatter([], [], s=5, c=TREAT_PALETTE[treat], alpha=0.4, linewidths=0)
+        ax.set_aspect("equal")
+        ax.set_xlim(_xlim)
+        ax.set_ylim(_ylim_xy if row_idx == 0 else _ylim_xz)
+        ax.set_xlabel(xcol.replace("template_", "").upper() + " (mm)", fontsize=8)
+        ax.set_ylabel(ycol.replace("template_", "").upper() + " (mm)", fontsize=8)
+        if row_idx == 0:
+            ax.set_title(f"{treat} / {geno}\n{proj_label}", fontsize=8)
+        else:
+            ax.set_title(proj_label, fontsize=8)
+        _scat_info[(col_idx, row_idx)] = (sc, xcol, ycol, treat, geno)
+
+title_text = fig_anim.suptitle("", fontsize=11)
+plt.tight_layout()
+
+
+def _anim_update(frame_idx):
+    start_um = frame_starts[frame_idx]
+    end_um = start_um + ANIM_WIN_UM
+    title_text.set_text(
+        f"{cohort} \u2014 plaques within "
+        f"{start_um:.0f}\u2013{end_um:.0f} \u00b5m vessel distance"
+    )
+    # Window is [start_um, end_um) — half-open interval so consecutive windows
+    # do not double-count plaques exactly on a boundary.
+    in_window = (df["sdt_CD31_um"] >= start_um) & (df["sdt_CD31_um"] < end_um)
+    artists = []
+    for (col_idx, row_idx), (sc, xcol, ycol, treat, geno) in _scat_info.items():
+        group_mask = in_window & (df["treatment"] == treat) & (df["genotype"] == geno)
+        pts = df.loc[group_mask, [xcol, ycol]]
+        if len(pts) > N_ANIM_SAMPLE:
+            pts = pts.sample(N_ANIM_SAMPLE, random_state=frame_idx)
+        if len(pts) > 0:
+            sc.set_offsets(pts.values)
+        else:
+            sc.set_offsets(np.empty((0, 2)))
+        artists.append(sc)
+    return artists
+
+
+anim = FuncAnimation(
+    fig_anim, _anim_update, frames=len(frame_starts), blit=True,
+    interval=1000 // ANIM_FPS,
+)
+writer = PillowWriter(fps=ANIM_FPS)
+anim.save(output_figs["spatial_plaques_vessel_dist_anim"], writer=writer, dpi=100)
+plt.close(fig_anim)

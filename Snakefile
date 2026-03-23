@@ -59,6 +59,12 @@ VESSEL_FIGS = [
     "vessel_calibre_subject",
     "vessel_diam_bins",
     "spatial_vessel_proximity",
+    "spatial_plaques_size",
+    "spatial_plaques_vessel_dist_bins",
+]
+
+VESSEL_GIFS = [
+    "spatial_plaques_vessel_dist_anim",
 ]
 
 ALL_FIGS = REGIONAL_FIGS + TREATMENT_FIGS + VESSEL_FIGS
@@ -70,6 +76,7 @@ rule all:
         expand("roi_data_{cohort}_seg-{seg}.parquet", cohort=COHORTS, seg=config['segs']),
         expand("figures/fig_{cohort}_{seg}_{fig}.png", cohort=COHORTS, fig=REGIONAL_FIGS, seg=config['segs']),
         expand("figures/fig_{cohort}_{fig}.png", cohort=COHORTS, fig=TREATMENT_FIGS + VESSEL_FIGS),
+        expand("figures/fig_{cohort}_{fig}.gif", cohort=COHORTS, fig=VESSEL_GIFS),
         expand("{cohort}_{csv}.csv", cohort=COHORTS, csv=REGIONAL_CSVS),
 
 
@@ -165,6 +172,9 @@ rule vessel_analysis:
         vessel_calibre_subject="figures/fig_{cohort}_vessel_calibre_subject.png",
         vessel_diam_bins="figures/fig_{cohort}_vessel_diam_bins.png",
         spatial_vessel_proximity="figures/fig_{cohort}_spatial_vessel_proximity.png",
+        spatial_plaques_size="figures/fig_{cohort}_spatial_plaques_size.png",
+        spatial_plaques_vessel_dist_bins="figures/fig_{cohort}_spatial_plaques_vessel_dist_bins.png",
+        spatial_plaques_vessel_dist_anim="figures/fig_{cohort}_spatial_plaques_vessel_dist_anim.gif",
     log:
         "logs/vessel_analysis_{cohort}.log",
     script:
