@@ -67,7 +67,12 @@ VESSEL_GIFS = [
     "spatial_plaques_vessel_dist_anim",
 ]
 
-ALL_FIGS = REGIONAL_FIGS + TREATMENT_FIGS + VESSEL_FIGS
+KDE_FIGS = [
+    "kde_plaque_burden",
+    "kde_plaque_burden_zslices",
+]
+
+ALL_FIGS = REGIONAL_FIGS + TREATMENT_FIGS + VESSEL_FIGS + KDE_FIGS
 
 
 # ── Default target ────────────────────────────────────────────────────────────
@@ -75,7 +80,7 @@ rule all:
     input:
         expand("roi_data_{cohort}_seg-{seg}.parquet", cohort=COHORTS, seg=config['segs']),
         expand("figures/fig_{cohort}_{seg}_{fig}.png", cohort=COHORTS, fig=REGIONAL_FIGS, seg=config['segs']),
-        expand("figures/fig_{cohort}_{fig}.png", cohort=COHORTS, fig=TREATMENT_FIGS + VESSEL_FIGS),
+        expand("figures/fig_{cohort}_{fig}.png", cohort=COHORTS, fig=TREATMENT_FIGS + VESSEL_FIGS + KDE_FIGS),
         expand("figures/fig_{cohort}_{fig}.gif", cohort=COHORTS, fig=VESSEL_GIFS),
         expand("{cohort}_{csv}.csv", cohort=COHORTS, csv=REGIONAL_CSVS),
 
@@ -179,3 +184,16 @@ rule vessel_analysis:
         "logs/vessel_analysis_{cohort}.log",
     script:
         "scripts/vessel_spatial_analysis.py"
+
+
+# ── 3-D KDE plaque-burden figures ────────────────────────────────────────────
+rule kde_analysis:
+    input:
+        parquet="data_{cohort}.parquet",
+    output:
+        kde_plaque_burden="figures/fig_{cohort}_kde_plaque_burden.png",
+        kde_plaque_burden_zslices="figures/fig_{cohort}_kde_plaque_burden_zslices.png",
+    log:
+        "logs/kde_analysis_{cohort}.log",
+    script:
+        "scripts/kde_plaque_burden.py"
