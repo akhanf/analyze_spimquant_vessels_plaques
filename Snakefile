@@ -64,6 +64,24 @@ REGIONAL_SIG_FIGS = [
     "significant_regions_bar",
 ]
 
+TREATMENT_CI_FIGS = [
+    "treatment_ci_plots",
+    "treatment_ci_forest",
+]
+
+TREATMENT_CI_CSVS = [
+    "treatment_ci_table",
+]
+
+REGIONAL_CI_FIGS = [
+    "regional_ci_forest",
+    "atlas_ci",
+]
+
+REGIONAL_CI_CSVS = [
+    "roi_ci_table",
+]
+
 VESSEL_FIGS = [
     "sdt_ecdf",
     "proximity_fractions_stacked",
@@ -100,6 +118,10 @@ rule all:
         expand("{cohort}_{csv}.csv", cohort=COHORTS, csv=REGIONAL_CSVS),
         expand("{cohort}_{csv}.csv", cohort=COHORTS, csv=TREATMENT_STATS_CSVS),
         expand("figures/fig_{cohort}_{seg}_{fig}.png", cohort=COHORTS, fig=REGIONAL_SIG_FIGS, seg=config['segs']),
+        expand("figures/fig_{cohort}_{fig}.png", cohort=COHORTS, fig=TREATMENT_CI_FIGS),
+        expand("{cohort}_{csv}.csv", cohort=COHORTS, csv=TREATMENT_CI_CSVS),
+        expand("figures/fig_{cohort}_{seg}_{fig}.png", cohort=COHORTS, fig=REGIONAL_CI_FIGS, seg=config['segs']),
+        expand("{cohort}_{seg}_{csv}.csv", cohort=COHORTS, seg=config['segs'], csv=REGIONAL_CI_CSVS),
 
 
 rule add_vol_to_dseg_tsv:
@@ -243,3 +265,32 @@ rule regional_significance:
         "logs/regional_significance_{cohort}_{seg}.log",
     script:
         "scripts/regional_significance.py"
+
+
+# ── Subject-level confidence-interval analysis (low-N friendly) ───────────────
+rule treatment_ci:
+    input:
+        parquet="data_{cohort}.parquet",
+    output:
+        treatment_ci_plots="figures/fig_{cohort}_treatment_ci_plots.png",
+        treatment_ci_forest="figures/fig_{cohort}_treatment_ci_forest.png",
+        treatment_ci_table="{cohort}_treatment_ci_table.csv",
+    log:
+        "logs/treatment_ci_{cohort}.log",
+    script:
+        "scripts/treatment_ci.py"
+
+
+# ── Per-region confidence-interval visualizations (low-N friendly) ────────────
+rule regional_ci:
+    input:
+        roi_parquet="roi_data_{cohort}_seg-{seg}.parquet",
+        atlas=lambda wildcards: Path(config['datasets'][wildcards.cohort]['spimquant_dir']) / "tpl-ABAv3" / "seg-{seg}_tpl-ABAv3_dseg.nii.gz",
+    output:
+        regional_ci_forest="figures/fig_{cohort}_{seg}_regional_ci_forest.png",
+        atlas_ci="figures/fig_{cohort}_{seg}_atlas_ci.png",
+        regional_ci_table="{cohort}_{seg}_roi_ci_table.csv",
+    log:
+        "logs/regional_ci_{cohort}_{seg}.log",
+    script:
+        "scripts/regional_ci.py"
