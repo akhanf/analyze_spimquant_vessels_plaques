@@ -69,6 +69,7 @@ VESSEL_GIFS = [
 
 KDE_FIGS = [
     "kde_plaque_burden",
+    "kde_plaque_burden_zslices",
 ]
 
 ALL_FIGS = REGIONAL_FIGS + TREATMENT_FIGS + VESSEL_FIGS + KDE_FIGS
@@ -191,6 +192,7 @@ rule kde_analysis:
         parquet="data_{cohort}.parquet",
     output:
         kde_plaque_burden="figures/fig_{cohort}_kde_plaque_burden.png",
+        kde_plaque_burden_zslices="figures/fig_{cohort}_kde_plaque_burden_zslices.png",
     log:
         "logs/kde_analysis_{cohort}.log",
     script:

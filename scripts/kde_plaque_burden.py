@@ -2,17 +2,21 @@
 
 Reads  : data_{cohort}.parquet
 Writes (one file per figure):
-  fig_{cohort}_kde_plaque_burden.png  KDE projections (XY and XZ) by genotype,
-                                       with PBS and Lecanemab overlaid to show
-                                       the treatment effect.
+  fig_{cohort}_kde_plaque_burden.png        KDE projections (XY and XZ) by genotype,
+                                             with PBS and Lecanemab overlaid to show
+                                             the treatment effect.
+  fig_{cohort}_kde_plaque_burden_zslices.png 20 XY density slices along the Z axis
+                                             (equally spaced in 1/20 increments),
+                                             per genotype with treatments overlaid.
 
 Method
 ------
 A weighted 3-D Gaussian KDE is computed per group using
 ``scipy.stats.gaussian_kde`` with ``weights=equiv_diam_um``, so larger plaques
 contribute proportionally more to the density estimate ("plaque burden").
-The 3-D density is evaluated on a regular grid and then marginalised (summed)
-along the Z or Y axis to produce XY and XZ projections respectively.
+The 3-D density is evaluated on a regular grid and then either marginalised
+(summed) along the Z or Y axis to produce XY and XZ projections, or sliced at
+20 equally-spaced Z positions to show the dorsal–ventral depth structure.
 """
 
 import warnings
@@ -46,6 +50,7 @@ else:
     cohort = args.cohort
     output_figs = {
         "kde_plaque_burden": f"{args.output_dir}/fig_{cohort}_kde_plaque_burden.png",
+        "kde_plaque_burden_zslices": f"{args.output_dir}/fig_{cohort}_kde_plaque_burden_zslices.png",
     }
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -60,14 +65,18 @@ VOL_THRESH_ML = 1e-4  # max plaque volume filter (removes large artifacts, same 
 # KDE/grid parameters
 N_KDE_MAX = 12_000   # max plaques per group for KDE fitting (balances accuracy vs runtime)
 GRID_N_XY = 45       # grid resolution for X and Y axes
-GRID_N_Z = 25        # grid resolution for Z axis (smaller typical Z range)
+GRID_N_Z = 20        # 20 equally-spaced Z levels (each level = one Z-slice in the slices figure)
 KDE_EVAL_BATCH = 20_000   # batch size for KDE grid evaluation (controls peak memory use)
 MIN_PLAQUES_FOR_KDE = 20  # minimum plaques in a group to attempt KDE fitting
 CONTOUR_PERCENTILES = [70, 85, 95]  # density percentiles at which to draw contour lines
 
+# Z-slices figure layout (GRID_N_Z slices arranged as ZSLICE_NROWS × ZSLICE_NCOLS)
+ZSLICE_NCOLS = 5
+ZSLICE_NROWS = GRID_N_Z // ZSLICE_NCOLS  # 4 rows × 5 cols = 20 panels
+
 PROJECTIONS = [
-    ("template_x", "template_y", "z", "XY projection (A–P × M–L)"),
-    ("template_x", "template_z", "y", "XZ projection (A–P × D–V)"),
+    ("template_x", "template_y", "z", "XY projection (A\u2013P \u00d7 M\u2013L)"),
+    ("template_x", "template_z", "y", "XZ projection (A\u2013P \u00d7 D\u2013V)"),
 ]
 
 
@@ -90,9 +99,9 @@ TREAT_CMAP = {
 }
 
 
-# ── Helper: 3-D KDE → 2-D projections ───────────────────────────────────────
-def kde_projections(x, y, z, weights, x_lim, y_lim, z_lim, rng_seed=42):
-    """Compute a weighted 3-D KDE and return marginalised XY and XZ projections.
+# ── Helper: 3-D KDE evaluation ───────────────────────────────────────────────
+def compute_kde_3d(x, y, z, weights, x_lim, y_lim, z_lim, rng_seed=42):
+    """Fit a weighted 3-D KDE and evaluate it on a regular grid.
 
     Parameters
     ----------
@@ -103,10 +112,9 @@ def kde_projections(x, y, z, weights, x_lim, y_lim, z_lim, rng_seed=42):
 
     Returns
     -------
-    projections : dict with keys ``"XY"`` and ``"XZ"``.
-        Each value is a dict ``{"gx": ..., "gy": ..., "density": ...}``
-        where ``gx``/``gy`` are 2-D meshgrid arrays and ``density`` is the
-        marginalised KDE intensity (same shape).
+    dict with keys:
+        ``density_3d``  : ndarray, shape (GRID_N_XY, GRID_N_XY, GRID_N_Z)
+        ``xi``, ``yi``, ``zi`` : 1-D coordinate arrays for each axis.
     """
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
@@ -131,22 +139,41 @@ def kde_projections(x, y, z, weights, x_lim, y_lim, z_lim, rng_seed=42):
     yi = np.linspace(y_lim[0], y_lim[1], GRID_N_XY)
     zi = np.linspace(z_lim[0], z_lim[1], GRID_N_Z)
 
-    dy = yi[1] - yi[0]
-    dz = zi[1] - zi[0]
-
     # Build full 3-D evaluation grid (indexing='ij' → shape (nx, ny, nz))
     gx3, gy3, gz3 = np.meshgrid(xi, yi, zi, indexing="ij")
     eval_pts = np.vstack([gx3.ravel(), gy3.ravel(), gz3.ravel()])
 
     # Evaluate in batches to avoid very large array allocations
-    batch = KDE_EVAL_BATCH
     n_eval = eval_pts.shape[1]
     density_flat = np.empty(n_eval, dtype=float)
-    for start in range(0, n_eval, batch):
-        end = min(start + batch, n_eval)
+    for start in range(0, n_eval, KDE_EVAL_BATCH):
+        end = min(start + KDE_EVAL_BATCH, n_eval)
         density_flat[start:end] = kde(eval_pts[:, start:end])
 
     density_3d = density_flat.reshape(GRID_N_XY, GRID_N_XY, GRID_N_Z)
+
+    return {"density_3d": density_3d, "xi": xi, "yi": yi, "zi": zi}
+
+
+def kde_projections(kde_data):
+    """Derive marginalised XY and XZ 2-D projections from a ``compute_kde_3d`` result.
+
+    Parameters
+    ----------
+    kde_data : dict as returned by ``compute_kde_3d``.
+
+    Returns
+    -------
+    dict with keys ``"XY"`` and ``"XZ"``.
+        Each value is ``{"gx": ..., "gy": ..., "density": ...}``.
+    """
+    density_3d = kde_data["density_3d"]
+    xi = kde_data["xi"]
+    yi = kde_data["yi"]
+    zi = kde_data["zi"]
+
+    dy = yi[1] - yi[0]
+    dz = zi[1] - zi[0]
 
     # XY projection: marginalise over Z (axis=2)
     xy_density = density_3d.sum(axis=2) * dz
@@ -160,6 +187,50 @@ def kde_projections(x, y, z, weights, x_lim, y_lim, z_lim, rng_seed=42):
         "XY": {"gx": gx_xy, "gy": gy_xy, "density": xy_density},
         "XZ": {"gx": gx_xz, "gy": gz_xz, "density": xz_density},
     }
+
+
+# ── Helper: render two overlaid treatment densities onto an axes ─────────────
+def _render_density_overlay(ax, treat_data, treat_present, proj_key, vmax=None):
+    """Draw pcolormesh + contours for each treatment on *ax*.
+
+    Parameters
+    ----------
+    ax        : matplotlib Axes.
+    treat_data : dict mapping treatment → projection dict (from ``kde_projections``).
+    treat_present : ordered list of treatment labels present in *treat_data*.
+    proj_key  : ``"XY"`` or ``"XZ"``.
+    vmax      : shared density scale; auto-computed if None.
+    """
+    if vmax is None:
+        vmax = max(
+            treat_data[t][proj_key]["density"].max()
+            for t in treat_present if t in treat_data
+        )
+
+    for treat in treat_present:
+        if treat not in treat_data:
+            continue
+        proj = treat_data[treat][proj_key]
+        gx, gy, dens = proj["gx"], proj["gy"], proj["density"]
+        dens_norm = dens / vmax if vmax > 0 else dens
+
+        ax.pcolormesh(
+            gx, gy, dens_norm,
+            cmap=TREAT_CMAP[treat],
+            shading="gouraud",
+            rasterized=True,
+            vmin=0.0, vmax=1.0,
+        )
+        levels = np.percentile(dens_norm[dens_norm > 0], CONTOUR_PERCENTILES)
+        levels = np.unique(levels)
+        if len(levels) >= 2:
+            ax.contour(
+                gx, gy, dens_norm,
+                levels=levels,
+                colors=[TREAT_PALETTE[treat]],
+                linewidths=0.8,
+                alpha=0.9,
+            )
 
 
 # ── Load and prepare data ────────────────────────────────────────────────────
@@ -177,7 +248,25 @@ x_lim = (df["template_x"].quantile(0.002), df["template_x"].quantile(0.998))
 y_lim = (df["template_y"].quantile(0.002), df["template_y"].quantile(0.998))
 z_lim = (df["template_z"].quantile(0.002), df["template_z"].quantile(0.998))
 
-# ── Main figure ───────────────────────────────────────────────────────────────
+# ── Pre-compute 3-D KDE for every (genotype, treatment) group ────────────────
+all_kde = {}  # {(geno, treat): {"density_3d": ..., "xi": ..., "yi": ..., "zi": ...}}
+for geno in geno_present:
+    for treat in treat_present:
+        mask = (df["genotype"] == geno) & (df["treatment"] == treat)
+        tdf = df.loc[mask]
+        if len(tdf) < MIN_PLAQUES_FOR_KDE:
+            continue
+        all_kde[(geno, treat)] = compute_kde_3d(
+            tdf["template_x"].values,
+            tdf["template_y"].values,
+            tdf["template_z"].values,
+            tdf["equiv_diam_um"].values,
+            x_lim=x_lim,
+            y_lim=y_lim,
+            z_lim=z_lim,
+        )
+
+# ── Figure 1: XY and XZ projections (marginalised over Z / Y) ────────────────
 # Layout: rows = genotypes, cols = projections (XY, XZ)
 n_genos = len(geno_present)
 n_proj = len(PROJECTIONS)
@@ -189,70 +278,28 @@ fig, axes = plt.subplots(
 )
 
 for row_idx, geno in enumerate(geno_present):
-    gdf = df[df["genotype"] == geno]
-
-    # Pre-compute KDE projections for each treatment present in this genotype
-    treat_projs = {}
-    for treat in treat_present:
-        tdf = gdf[gdf["treatment"] == treat]
-        if len(tdf) < MIN_PLAQUES_FOR_KDE:
-            continue
-        treat_projs[treat] = kde_projections(
-            tdf["template_x"].values,
-            tdf["template_y"].values,
-            tdf["template_z"].values,
-            tdf["equiv_diam_um"].values,
-            x_lim=x_lim,
-            y_lim=y_lim,
-            z_lim=z_lim,
-        )
+    # Build projection dicts for each treatment in this genotype
+    treat_projs = {
+        treat: kde_projections(all_kde[(geno, treat)])
+        for treat in treat_present if (geno, treat) in all_kde
+    }
 
     for col_idx, (xcol, ycol, marginal_axis, proj_label) in enumerate(PROJECTIONS):
         proj_key = "XY" if marginal_axis == "z" else "XZ"
         ax = axes[row_idx, col_idx]
 
-        # Find shared density scale across treatments for this genotype/projection
-        all_densities = [
-            treat_projs[t][proj_key]["density"]
-            for t in treat_present if t in treat_projs
-        ]
-        if not all_densities:
+        if not treat_projs:
             ax.set_visible(False)
             continue
+
+        all_densities = [treat_projs[t][proj_key]["density"] for t in treat_present if t in treat_projs]
         vmax = max(d.max() for d in all_densities)
-
-        for treat in treat_present:
-            if treat not in treat_projs:
-                continue
-            proj = treat_projs[treat][proj_key]
-            gx, gy, dens = proj["gx"], proj["gy"], proj["density"]
-
-            # Normalise density to [0, 1] relative to the shared scale
-            dens_norm = dens / vmax if vmax > 0 else dens
-
-            ax.pcolormesh(
-                gx, gy, dens_norm,
-                cmap=TREAT_CMAP[treat],
-                shading="gouraud",
-                rasterized=True,
-                vmin=0.0, vmax=1.0,
-            )
-            # Overlay a few contour lines at the top density percentiles
-            levels = np.percentile(dens_norm[dens_norm > 0], CONTOUR_PERCENTILES)
-            levels = np.unique(levels)
-            if len(levels) >= 2:
-                ax.contour(
-                    gx, gy, dens_norm,
-                    levels=levels,
-                    colors=[TREAT_PALETTE[treat]],
-                    linewidths=0.8,
-                    alpha=0.9,
-                )
+        _render_density_overlay(ax, treat_projs, treat_present, proj_key, vmax=vmax)
 
         ax.set_aspect("equal")
         ax.set_xlabel(xcol.replace("template_", "").upper() + " (mm)", fontsize=9)
         ax.set_ylabel(ycol.replace("template_", "").upper() + " (mm)", fontsize=9)
-        ax.set_title(f"{geno} — {proj_label}", fontsize=10)
+        ax.set_title(f"{geno} \u2014 {proj_label}", fontsize=10)
 
         # Legend patches (only on the first row, last column)
         if row_idx == 0 and col_idx == n_proj - 1:
@@ -274,3 +321,97 @@ fig.suptitle(
 plt.tight_layout()
 plt.savefig(output_figs["kde_plaque_burden"], dpi=150, bbox_inches="tight")
 plt.close(fig)
+
+# ── Figure 2: 20 XY slices along the Z axis per genotype ────────────────────
+# Layout: each genotype gets a block of ZSLICE_NROWS × ZSLICE_NCOLS subplots.
+# All genotype blocks are stacked vertically in a single figure.
+
+# Shared vmax across all groups and slices (for consistent colour scale)
+slice_vmax = max(
+    data["density_3d"].max() for data in all_kde.values()
+)
+
+fig2, axes2 = plt.subplots(
+    n_genos * ZSLICE_NROWS,
+    ZSLICE_NCOLS,
+    figsize=(3.5 * ZSLICE_NCOLS, 3.5 * ZSLICE_NROWS * n_genos),
+    squeeze=False,
+)
+
+# Use the Z grid from the first available KDE (all share the same grid)
+zi_ref = next(iter(all_kde.values()))["zi"]
+xi_ref = next(iter(all_kde.values()))["xi"]
+yi_ref = next(iter(all_kde.values()))["yi"]
+gx_slice, gy_slice = np.meshgrid(xi_ref, yi_ref, indexing="ij")
+
+for geno_idx, geno in enumerate(geno_present):
+    row_offset = geno_idx * ZSLICE_NROWS
+
+    for slice_idx in range(GRID_N_Z):
+        row = row_offset + slice_idx // ZSLICE_NCOLS
+        col = slice_idx % ZSLICE_NCOLS
+        ax = axes2[row, col]
+
+        z_val = zi_ref[slice_idx]
+
+        for treat in treat_present:
+            if (geno, treat) not in all_kde:
+                continue
+            dens_slice = all_kde[(geno, treat)]["density_3d"][:, :, slice_idx]
+            dens_norm = dens_slice / slice_vmax if slice_vmax > 0 else dens_slice
+
+            ax.pcolormesh(
+                gx_slice, gy_slice, dens_norm,
+                cmap=TREAT_CMAP[treat],
+                shading="gouraud",
+                rasterized=True,
+                vmin=0.0, vmax=1.0,
+            )
+            levels = np.percentile(dens_norm[dens_norm > 0], CONTOUR_PERCENTILES)
+            levels = np.unique(levels)
+            if len(levels) >= 2:
+                ax.contour(
+                    gx_slice, gy_slice, dens_norm,
+                    levels=levels,
+                    colors=[TREAT_PALETTE[treat]],
+                    linewidths=0.6,
+                    alpha=0.9,
+                )
+
+        ax.set_aspect("equal")
+        ax.set_title(f"z = {z_val:.2f} mm", fontsize=7)
+        ax.tick_params(labelsize=6)
+        if col == 0:
+            ax.set_ylabel("Y (mm)", fontsize=7)
+        if row == row_offset + ZSLICE_NROWS - 1:
+            ax.set_xlabel("X (mm)", fontsize=7)
+
+    # Genotype label on the leftmost panel of the first row of each block
+    axes2[row_offset, 0].annotate(
+        geno,
+        xy=(0, 0.5), xycoords="axes fraction",
+        xytext=(-0.35, 0.5), textcoords="axes fraction",
+        fontsize=9, fontweight="bold", va="center", ha="right",
+        rotation=90,
+    )
+
+# Shared legend (top-right of the figure)
+legend_handles = [
+    Patch(facecolor=TREAT_PALETTE[t], alpha=0.75, label=t)
+    for t in treat_present
+]
+fig2.legend(
+    handles=legend_handles,
+    title="Treatment",
+    loc="upper right",
+    fontsize=9,
+    bbox_to_anchor=(1.0, 1.0),
+)
+
+fig2.suptitle(
+    f"Plaque burden KDE \u2014 Z-axis slices (1/{GRID_N_Z} increments) \u2014 {cohort}",
+    fontsize=13,
+)
+plt.tight_layout()
+plt.savefig(output_figs["kde_plaque_burden_zslices"], dpi=150, bbox_inches="tight")
+plt.close(fig2)
