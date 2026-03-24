@@ -49,6 +49,21 @@ TREATMENT_FIGS = [
     "size_distribution_by_genotype",
 ]
 
+TREATMENT_STATS_FIGS = [
+    "treatment_stats_boxplots",
+]
+
+TREATMENT_STATS_CSVS = [
+    "treatment_anova_table",
+    "treatment_tukey_results",
+]
+
+REGIONAL_SIG_FIGS = [
+    "atlas_significance",
+    "regional_volcano",
+    "significant_regions_bar",
+]
+
 VESSEL_FIGS = [
     "sdt_ecdf",
     "proximity_fractions_stacked",
@@ -72,7 +87,7 @@ KDE_FIGS = [
     "kde_plaque_burden_zslices",
 ]
 
-ALL_FIGS = REGIONAL_FIGS + TREATMENT_FIGS + VESSEL_FIGS + KDE_FIGS
+ALL_FIGS = REGIONAL_FIGS + TREATMENT_FIGS + TREATMENT_STATS_FIGS + VESSEL_FIGS + KDE_FIGS
 
 
 # ── Default target ────────────────────────────────────────────────────────────
@@ -80,9 +95,11 @@ rule all:
     input:
         expand("roi_data_{cohort}_seg-{seg}.parquet", cohort=COHORTS, seg=config['segs']),
         expand("figures/fig_{cohort}_{seg}_{fig}.png", cohort=COHORTS, fig=REGIONAL_FIGS, seg=config['segs']),
-        expand("figures/fig_{cohort}_{fig}.png", cohort=COHORTS, fig=TREATMENT_FIGS + VESSEL_FIGS + KDE_FIGS),
+        expand("figures/fig_{cohort}_{fig}.png", cohort=COHORTS, fig=TREATMENT_FIGS + TREATMENT_STATS_FIGS + VESSEL_FIGS + KDE_FIGS),
         expand("figures/fig_{cohort}_{fig}.gif", cohort=COHORTS, fig=VESSEL_GIFS),
         expand("{cohort}_{csv}.csv", cohort=COHORTS, csv=REGIONAL_CSVS),
+        expand("{cohort}_{csv}.csv", cohort=COHORTS, csv=TREATMENT_STATS_CSVS),
+        expand("figures/fig_{cohort}_{seg}_{fig}.png", cohort=COHORTS, fig=REGIONAL_SIG_FIGS, seg=config['segs']),
 
 
 rule add_vol_to_dseg_tsv:
@@ -197,3 +214,32 @@ rule kde_analysis:
         "logs/kde_analysis_{cohort}.log",
     script:
         "scripts/kde_plaque_burden.py"
+
+
+# ── Subject-level treatment statistics with significance annotations ──────────
+rule treatment_stats:
+    input:
+        parquet="data_{cohort}.parquet",
+    output:
+        treatment_stats_boxplots="figures/fig_{cohort}_treatment_stats_boxplots.png",
+        treatment_anova_table="{cohort}_treatment_anova_table.csv",
+        treatment_tukey_results="{cohort}_treatment_tukey_results.csv",
+    log:
+        "logs/treatment_stats_{cohort}.log",
+    script:
+        "scripts/treatment_stats.py"
+
+
+# ── Regional significance visualizations ─────────────────────────────────────
+rule regional_significance:
+    input:
+        stats_csv="{cohort}_{seg}_roi_treatment_stats.csv",
+        atlas=lambda wildcards: Path(config['datasets'][wildcards.cohort]['spimquant_dir']) / "tpl-ABAv3" / "seg-{seg}_tpl-ABAv3_dseg.nii.gz",
+    output:
+        atlas_significance="figures/fig_{cohort}_{seg}_atlas_significance.png",
+        regional_volcano="figures/fig_{cohort}_{seg}_regional_volcano.png",
+        significant_regions_bar="figures/fig_{cohort}_{seg}_significant_regions_bar.png",
+    log:
+        "logs/regional_significance_{cohort}_{seg}.log",
+    script:
+        "scripts/regional_significance.py"
