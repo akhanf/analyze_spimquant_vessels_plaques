@@ -1,0 +1,5 @@
+metric,metric_label,group1,group2,meandiff,p-adj,reject,stars
+plaque_count,Total plaque count,PBS,Lecanemab,-18049.0,0.05316157597316095,False,ns
+total_vol_ml,Total plaque burden (mL),PBS,Lecanemab,-0.10025437077333332,0.32961566722051383,False,ns
+median_vol_ml,Median plaque size (mL),PBS,Lecanemab,2.1824000000000013e-07,0.5220207617644701,False,ns
+median_diam_um,Median plaque diameter (µm),PBS,Lecanemab,0.34384253828006806,0.5239676882111863,False,ns

@@ -1,0 +1,9 @@
+metric,metric_label,term,df,sum_sq,F,PR(>F),significant,stars
+plaque_count,Total plaque count,C(treatment),1.0,488649601.4999999,7.945307516902794,0.04788929276112257,True,*
+plaque_count,Total plaque count,Residual,4.0,246006640.0,,,False,ns
+total_vol_ml,Total plaque burden (mL),C(treatment),1.0,0.015076408288735549,1.3461574664261855,0.3104820985775649,False,ns
+total_vol_ml,Total plaque burden (mL),Residual,4.0,0.044798349865445675,,,False,ns
+median_vol_ml,Median plaque size (mL),C(treatment),1.0,7.144304639999951e-14,0.5016821345707628,0.5178548395513216,False,ns
+median_vol_ml,Median plaque size (mL),Residual,4.0,5.696279893333327e-13,,,False,ns
+median_diam_um,Median plaque diameter (µm),C(treatment),1.0,0.1773415366963164,0.49442697002160124,0.5207298049031585,False,ns
+median_diam_um,Median plaque diameter (µm),Residual,4.0,1.4347238111915168,,,False,ns

@@ -97,7 +97,7 @@ rule all:
         expand("figures/fig_{cohort}_{seg}_{fig}.png", cohort=COHORTS, fig=REGIONAL_FIGS, seg=config['segs']),
         expand("figures/fig_{cohort}_{fig}.png", cohort=COHORTS, fig=TREATMENT_FIGS + TREATMENT_STATS_FIGS + VESSEL_FIGS + KDE_FIGS),
         expand("figures/fig_{cohort}_{fig}.gif", cohort=COHORTS, fig=VESSEL_GIFS),
-        expand("{cohort}_{csv}.csv", cohort=COHORTS, csv=REGIONAL_CSVS),
+#        expand("{cohort}_{csv}.csv", cohort=COHORTS, csv=REGIONAL_CSVS),
         expand("{cohort}_{csv}.csv", cohort=COHORTS, csv=TREATMENT_STATS_CSVS),
         expand("figures/fig_{cohort}_{seg}_{fig}.png", cohort=COHORTS, fig=REGIONAL_SIG_FIGS, seg=config['segs']),
 

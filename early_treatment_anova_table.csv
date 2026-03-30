@@ -1,0 +1,17 @@
+metric,metric_label,term,df,sum_sq,F,PR(>F),significant,stars
+plaque_count,Total plaque count,C(treatment),1.0,2988818592.4000015,17.748322109240764,0.005605273220931222,True,**
+plaque_count,Total plaque count,C(genotype),1.0,1193362203.750003,7.086471169245812,0.03742183988304049,True,*
+plaque_count,Total plaque count,C(treatment):C(genotype),1.0,9907.350000000835,5.883222203452766e-05,0.9941287806699548,False,ns
+plaque_count,Total plaque count,Residual,6.0,1010400388.5,,,False,ns
+total_vol_ml,Total plaque burden (mL),C(treatment),1.0,0.21830614393472114,18.255599082411017,0.0052477349210102095,True,**
+total_vol_ml,Total plaque burden (mL),C(genotype),1.0,0.12169991309663468,10.177014635560456,0.018832916034434648,True,*
+total_vol_ml,Total plaque burden (mL),C(treatment):C(genotype),1.0,0.00849703672228369,0.7105548794674285,0.4315733847236339,False,ns
+total_vol_ml,Total plaque burden (mL),Residual,6.0,0.07174987014643272,,,False,ns
+median_vol_ml,Median plaque size (mL),C(treatment),1.0,1.198411878399994e-13,6.21023756866659,0.04703248391659641,True,*
+median_vol_ml,Median plaque size (mL),C(genotype),1.0,3.0234641066666905e-13,15.667760576443019,0.007466687393902873,True,**
+median_vol_ml,Median plaque size (mL),C(treatment):C(genotype),1.0,3.5872768682666787e-13,18.589469929371546,0.005028890898206954,True,**
+median_vol_ml,Median plaque size (mL),Residual,6.0,1.1578415786666664e-13,,,False,ns
+median_diam_um,Median plaque diameter (µm),C(treatment),1.0,0.36600706690619994,5.148855078361508,0.06374566291341145,False,ns
+median_diam_um,Median plaque diameter (µm),C(genotype),1.0,0.9843731818758736,13.847805998247004,0.009837660879950702,True,**
+median_diam_um,Median plaque diameter (µm),C(treatment):C(genotype),1.0,1.1716847734538016,16.482837741443255,0.006651207560916182,True,**
+median_diam_um,Median plaque diameter (µm),Residual,6.0,0.4265108199813684,,,False,ns
