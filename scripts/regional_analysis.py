@@ -300,15 +300,17 @@ plt.tight_layout()
 plt.savefig(output_figs["roi_metric_heatmap"], dpi=150)
 plt.close(fig)
 
-prox_cols = [c for c in ["frac_inside_vessel", "frac_near_vessel", "frac_far_vessel"] if c in roi_top.columns]
-prox_labels = [l for c, l in zip(
-    ["frac_inside_vessel", "frac_near_vessel", "frac_far_vessel"],
-    ["Inside vessel", "Near vessel", "Far from vessel"],
-) if c in roi_top.columns]
+PROXIMITY_COLUMNS = [
+    ("frac_inside_vessel", "Inside vessel"),
+    ("frac_near_vessel", "Near vessel"),
+    ("frac_far_vessel", "Far from vessel"),
+]
+prox_cols = [c for c, _ in PROXIMITY_COLUMNS if c in roi_top.columns]
+prox_labels = [l for c, l in PROXIMITY_COLUMNS if c in roi_top.columns]
 if prox_cols:
-    fig, axes = plt.subplots(1, len(prox_cols), figsize=(18, 7), sharey=True)
-    if len(prox_cols) == 1:
-        axes = [axes]
+    fig, axes = plt.subplots(1, len(prox_cols), figsize=(18, 7), sharey=True,
+                             squeeze=False)
+    axes = axes[0]  # unwrap to 1-D array regardless of len(prox_cols)
     for ax, col, label in zip(axes, prox_cols, prox_labels):
         sns.boxplot(
             data=roi_top, y="region_abbr", x=col, hue="treatment",
