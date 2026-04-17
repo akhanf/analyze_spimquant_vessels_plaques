@@ -144,7 +144,7 @@ rule regional_analysis:
         roi_parquet="roi_data_{cohort}_seg-{seg}.parquet",
         atlas=lambda wildcards: Path(config['datasets'][wildcards.cohort]['spimquant_dir']) / "tpl-ABAv3"  / "seg-{seg}_tpl-ABAv3_dseg.nii.gz",
     params:
-        metric="plaque_density",
+        plot_config=config['plot_config'],
     output:
         roi_top_density="figures/fig_{cohort}_{seg}_roi_top_density.png",
         roi_density_boxplot="figures/fig_{cohort}_{seg}_roi_density_boxplot.png",
@@ -167,6 +167,8 @@ rule regional_analysis:
 rule treatment_analysis:
     input:
         parquet="data_{cohort}.parquet",
+    params:
+        plot_config=config['plot_config'],
     output:
         boxplots_treatment_genotype="figures/fig_{cohort}_boxplots_treatment_genotype.png",
         violin_plaque_size="figures/fig_{cohort}_violin_plaque_size.png",
@@ -184,6 +186,8 @@ rule treatment_analysis:
 rule vessel_analysis:
     input:
         parquet="data_{cohort}.parquet",
+    params:
+        plot_config=config['plot_config'],
     output:
         sdt_ecdf="figures/fig_{cohort}_sdt_ecdf.png",
         proximity_fractions_stacked="figures/fig_{cohort}_proximity_fractions_stacked.png",
@@ -207,6 +211,8 @@ rule vessel_analysis:
 rule kde_analysis:
     input:
         parquet="data_{cohort}.parquet",
+    params:
+        plot_config=config['plot_config'],
     output:
         kde_plaque_burden="figures/fig_{cohort}_kde_plaque_burden.png",
         kde_plaque_burden_zslices="figures/fig_{cohort}_kde_plaque_burden_zslices.png",
@@ -220,6 +226,8 @@ rule kde_analysis:
 rule treatment_stats:
     input:
         parquet="data_{cohort}.parquet",
+    params:
+        plot_config=config['plot_config'],
     output:
         treatment_stats_boxplots="figures/fig_{cohort}_treatment_stats_boxplots.png",
         treatment_anova_table="{cohort}_treatment_anova_table.csv",
@@ -235,6 +243,8 @@ rule regional_significance:
     input:
         stats_csv="{cohort}_{seg}_roi_treatment_stats.csv",
         atlas=lambda wildcards: Path(config['datasets'][wildcards.cohort]['spimquant_dir']) / "tpl-ABAv3" / "seg-{seg}_tpl-ABAv3_dseg.nii.gz",
+    params:
+        plot_config=config['plot_config'],
     output:
         atlas_significance="figures/fig_{cohort}_{seg}_atlas_significance.png",
         regional_volcano="figures/fig_{cohort}_{seg}_regional_volcano.png",

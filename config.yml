@@ -12,3 +12,36 @@ segs:
   - roi198
   - all
 
+# ── Plot configuration ────────────────────────────────────────────────────────
+# Seaborn-style factor definitions.  Each named factor specifies:
+#   column  : the column name in the parquet data
+#   order   : ordered list of category values (first = reference / control)
+#   palette : mapping from category value to hex colour
+#
+# primary_metric     : column used for the main statistical analysis
+#                      (fold-change, regional t-tests, ANOVA, etc.)
+# volume_threshold_ml: plaques larger than this value are filtered out as
+#                      artefacts before any analysis or plotting.
+plot_config:
+  factors:
+    treatment:
+      column: treatment
+      order: [PBS, Lecanemab]
+      palette:
+        PBS: "#4C72B0"
+        Lecanemab: "#DD8452"
+    genotype:
+      column: genotype
+      order: [ApoE3, ApoE4]
+      palette:
+        ApoE3: "#55A868"
+        ApoE4: "#C44E52"
+    sex:
+      column: sex
+      order: [M, F]
+      palette:
+        M: "#8172B2"
+        F: "#CCB974"
+  primary_metric: plaque_density
+  volume_threshold_ml: 1.0e-4
+
