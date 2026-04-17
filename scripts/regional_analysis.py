@@ -175,12 +175,16 @@ roi_df["genotype"] = pd.Categorical(roi_df["genotype"], categories=geno_present,
 geno_palette = {g: GENO_PALETTE[g] for g in geno_present}
 n_geno = len(geno_present)
 
-METRIC_COLS = [
-    "plaque_count", "plaque_density", "vol_density_ml", "total_vol_ml",
-    "mean_diam_um", "median_diam_um",
+VESSEL_METRIC_COLS = [
     "mean_sdt_um", "median_sdt_um",
     "frac_inside_vessel", "frac_near_vessel", "frac_far_vessel",
 ]
+
+METRIC_COLS = [
+    "plaque_count", "plaque_density", "vol_density_ml", "total_vol_ml",
+    "mean_diam_um", "median_diam_um",
+]
+METRIC_COLS += [c for c in VESSEL_METRIC_COLS if c in roi_df_raw.columns]
 roi_mean = (
     roi_df.groupby(["index", "name"], observed=True)[METRIC_COLS].mean().reset_index()
 )
@@ -202,11 +206,18 @@ roi_mean = roi_mean.merge(
     _treat_med[["index", "name", "lec_pbs_log2fc"]], on=["index", "name"], how="left"
 )
 
+has_vessels = "frac_inside_vessel" in roi_df.columns
+
+top_regions_cols = [
+    "index", "name", "plaque_density", "plaque_count", "vol_density_ml",
+    "total_vol_ml", "mean_diam_um", "lec_pbs_log2fc",
+]
+if has_vessels:
+    top_regions_cols += ["frac_inside_vessel", "frac_near_vessel", "frac_far_vessel"]
+
 top_regions = (
     roi_mean.nsmallest(TOP_N, "lec_pbs_log2fc")[
-        ["index", "name", "plaque_density", "plaque_count", "vol_density_ml", "total_vol_ml",
-         "mean_diam_um", "frac_inside_vessel", "frac_near_vessel", "frac_far_vessel",
-         "lec_pbs_log2fc"]
+        [c for c in top_regions_cols if c in roi_mean.columns]
     ].reset_index(drop=True)
 )
 top_idx = top_regions["index"].tolist()
@@ -254,7 +265,7 @@ plt.tight_layout()
 plt.savefig(output_figs["roi_density_boxplot"], dpi=150)
 plt.close(fig)
 
-DISPLAY_METRICS = {
+ALL_DISPLAY_METRICS = {
     "plaque_density": "Density\n(n/mm\u00b3)",
     "vol_density_ml": "Vol density\n(mL/mm\u00b3)",
     "mean_diam_um": "Mean diam\n(\u00b5m)",
@@ -264,6 +275,7 @@ DISPLAY_METRICS = {
     "frac_near_vessel": "Frac near\nvessel",
     "frac_far_vessel": "Frac far\nfrom vessel",
 }
+DISPLAY_METRICS = {k: v for k, v in ALL_DISPLAY_METRICS.items() if k in roi_mean.columns}
 summary_tbl = (
     roi_mean.loc[roi_mean["index"].isin(top_idx)]
     .set_index("name")[list(DISPLAY_METRICS.keys())]
@@ -288,25 +300,38 @@ plt.tight_layout()
 plt.savefig(output_figs["roi_metric_heatmap"], dpi=150)
 plt.close(fig)
 
-prox_cols = ["frac_inside_vessel", "frac_near_vessel", "frac_far_vessel"]
-prox_labels = ["Inside vessel", "Near vessel", "Far from vessel"]
-fig, axes = plt.subplots(1, len(prox_cols), figsize=(18, 7), sharey=True)
-for ax, col, label in zip(axes, prox_cols, prox_labels):
-    sns.boxplot(
-        data=roi_top, y="region_abbr", x=col, hue="treatment",
-        hue_order=TREAT_ORDER, palette=TREAT_PALETTE, orient="h", width=0.6, ax=ax,
+prox_cols = [c for c in ["frac_inside_vessel", "frac_near_vessel", "frac_far_vessel"] if c in roi_top.columns]
+prox_labels = [l for c, l in zip(
+    ["frac_inside_vessel", "frac_near_vessel", "frac_far_vessel"],
+    ["Inside vessel", "Near vessel", "Far from vessel"],
+) if c in roi_top.columns]
+if prox_cols:
+    fig, axes = plt.subplots(1, len(prox_cols), figsize=(18, 7), sharey=True)
+    if len(prox_cols) == 1:
+        axes = [axes]
+    for ax, col, label in zip(axes, prox_cols, prox_labels):
+        sns.boxplot(
+            data=roi_top, y="region_abbr", x=col, hue="treatment",
+            hue_order=TREAT_ORDER, palette=TREAT_PALETTE, orient="h", width=0.6, ax=ax,
+        )
+        ax.set_title(label, fontsize=12)
+        ax.set_xlabel("Fraction of plaques")
+        ax.set_ylabel("Region" if ax is axes[0] else "")
+        ax.legend(title="Treatment", fontsize=8)
+    fig.suptitle(
+        f"Vessel-proximity fractions \u2014 top {TOP_N} regions \u2014 {cohort}",
+        fontsize=14,
     )
-    ax.set_title(label, fontsize=12)
-    ax.set_xlabel("Fraction of plaques")
-    ax.set_ylabel("Region" if ax is axes[0] else "")
-    ax.legend(title="Treatment", fontsize=8)
-fig.suptitle(
-    f"Vessel-proximity fractions \u2014 top {TOP_N} regions \u2014 {cohort}",
-    fontsize=14,
-)
-plt.tight_layout()
-plt.savefig(output_figs["roi_proximity_fractions"], dpi=150)
-plt.close(fig)
+    plt.tight_layout()
+    plt.savefig(output_figs["roi_proximity_fractions"], dpi=150)
+    plt.close(fig)
+else:
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.text(0.5, 0.5, "No vessel data available", ha="center", va="center",
+            transform=ax.transAxes, fontsize=13)
+    ax.axis("off")
+    plt.savefig(output_figs["roi_proximity_fractions"], dpi=150)
+    plt.close(fig)
 
 fc_df = roi_fold_change(
     roi_df, top_idx=top_idx, top_regions=top_regions, geno_order=geno_present
@@ -446,13 +471,21 @@ plot_atlas_heatmap(
     savepath=output_figs["atlas_mean_diam"],
 )
 
-inside_all = roi_df.groupby("index", observed=True)["frac_inside_vessel"].mean()
-vol_inside = make_metric_volume(atlas_data, inside_all)
-plot_atlas_heatmap(
-    vol_inside,
-    title=f"Fraction of plaques inside vessels \u2014 {cohort}",
-    cmap="viridis",
-    cbar_label="Fraction inside vessel",
-    vmin=0,
-    savepath=output_figs["atlas_frac_inside"],
-)
+inside_all = roi_df.groupby("index", observed=True)["frac_inside_vessel"].mean() if has_vessels else None
+if inside_all is not None:
+    vol_inside = make_metric_volume(atlas_data, inside_all)
+    plot_atlas_heatmap(
+        vol_inside,
+        title=f"Fraction of plaques inside vessels \u2014 {cohort}",
+        cmap="viridis",
+        cbar_label="Fraction inside vessel",
+        vmin=0,
+        savepath=output_figs["atlas_frac_inside"],
+    )
+else:
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.text(0.5, 0.5, "No vessel data available", ha="center", va="center",
+            transform=ax.transAxes, fontsize=13)
+    ax.axis("off")
+    plt.savefig(output_figs["atlas_frac_inside"], dpi=150)
+    plt.close(fig)

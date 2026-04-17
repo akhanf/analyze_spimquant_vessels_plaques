@@ -68,7 +68,8 @@ print(
 )
 
 # add derived variables
-df["sdt_CD31_um"] = df["sdt_CD31"] * 1000.0
+if "sdt_CD31" in df.columns:
+    df["sdt_CD31_um"] = df["sdt_CD31"] * 1000.0
 df["plaque_vol_um3"] = df["nvoxels"] * VOXEL_VOL_UM3
 df["plaque_vol_ml"] = df["nvoxels"] * VOXEL_VOL_ML
 df["equiv_diam_um"] = 2 * ((3 * df["plaque_vol_um3"]) / (4 * np.pi)) ** (1 / 3)

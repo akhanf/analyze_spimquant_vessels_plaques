@@ -160,7 +160,12 @@ geno_palette = {g: GENO_PALETTE[g] for g in geno_present}
 n_geno = len(geno_present)
 
 if "sdt_CD31_um" not in df.columns:
-    df["sdt_CD31_um"] = df["sdt_CD31"] * 1000.0
+    raise RuntimeError(
+        f"Vessel analysis requested for cohort '{cohort}' but 'sdt_CD31_um' "
+        "column is absent from the parquet file. "
+        "Set 'has_vessel_data: false' for this cohort in config.yml to skip "
+        "vessel figures."
+    )
 
 PROX_PALETTE = {
     "inside vessel": "#C44E52",

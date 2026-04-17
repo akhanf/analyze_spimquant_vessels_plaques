@@ -32,7 +32,12 @@ def classify_plaques(
     vessel_bins_um=VESSEL_BINS_UM,
     vessel_bin_labels=VESSEL_BIN_LABELS,
 ):
-    """Add vessel-relation category and min-vessel-diameter estimate."""
+    """Add vessel-relation category and min-vessel-diameter estimate.
+
+    Returns the input DataFrame unchanged if ``sdt_CD31_um`` is not present.
+    """
+    if "sdt_CD31_um" not in plaque_df.columns:
+        return plaque_df
     out = plaque_df.copy()
     out["vessel_relation"] = pd.cut(
         out["sdt_CD31_um"],
@@ -61,9 +66,10 @@ def classify_plaques(
 
 def build_roi_dataframe(plaque_df, group_cols=GROUP_COLS):
     """Aggregate plaque metrics per subject per atlas ROI."""
+    has_vessels = "sdt_CD31_um" in plaque_df.columns
     grp = plaque_df.groupby(group_cols, observed=True)
 
-    agg = grp.agg(
+    agg_spec = dict(
         plaque_count=("nvoxels", "size"),
         total_vol_ml=("plaque_vol_ml", "sum"),
         mean_vol_ml=("plaque_vol_ml", "mean"),
@@ -71,9 +77,15 @@ def build_roi_dataframe(plaque_df, group_cols=GROUP_COLS):
         mean_diam_um=("equiv_diam_um", "mean"),
         median_diam_um=("equiv_diam_um", "median"),
         total_vol_um3=("plaque_vol_um3", "sum"),
-        mean_sdt_um=("sdt_CD31_um", "mean"),
-        median_sdt_um=("sdt_CD31_um", "median"),
-    ).reset_index()
+    )
+    if has_vessels:
+        agg_spec["mean_sdt_um"] = ("sdt_CD31_um", "mean")
+        agg_spec["median_sdt_um"] = ("sdt_CD31_um", "median")
+
+    agg = grp.agg(**agg_spec).reset_index()
+
+    if not has_vessels or "vessel_relation" not in plaque_df.columns:
+        return agg
 
     rel_counts = (
         plaque_df.groupby(group_cols + ["vessel_relation"], observed=True)

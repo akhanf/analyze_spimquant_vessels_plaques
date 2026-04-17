@@ -22,6 +22,11 @@ wildcard_constraints:
 # ── Cohorts ───────────────────────────────────────────────────────────────────
 COHORTS = config['datasets'].keys()
 
+
+def cohort_has_vessels(cohort):
+    """Return True if the cohort has CD31 vessel data (default: True)."""
+    return config['datasets'].get(cohort, {}).get('has_vessel_data', True)
+
 # ── Figure groups ─────────────────────────────────────────────────────────────
 REGIONAL_FIGS = [
     "roi_top_density",
@@ -95,8 +100,19 @@ rule all:
     input:
         expand("roi_data_{cohort}_seg-{seg}.parquet", cohort=COHORTS, seg=config['segs']),
         expand("figures/fig_{cohort}_{seg}_{fig}.png", cohort=COHORTS, fig=REGIONAL_FIGS, seg=config['segs']),
-        expand("figures/fig_{cohort}_{fig}.png", cohort=COHORTS, fig=TREATMENT_FIGS + TREATMENT_STATS_FIGS + VESSEL_FIGS + KDE_FIGS),
-        expand("figures/fig_{cohort}_{fig}.gif", cohort=COHORTS, fig=VESSEL_GIFS),
+        expand("figures/fig_{cohort}_{fig}.png", cohort=COHORTS, fig=TREATMENT_FIGS + TREATMENT_STATS_FIGS + KDE_FIGS),
+        [
+            f"figures/fig_{cohort}_{fig}.png"
+            for cohort in COHORTS
+            for fig in VESSEL_FIGS
+            if cohort_has_vessels(cohort)
+        ],
+        [
+            f"figures/fig_{cohort}_{fig}.gif"
+            for cohort in COHORTS
+            for fig in VESSEL_GIFS
+            if cohort_has_vessels(cohort)
+        ],
 #        expand("{cohort}_{csv}.csv", cohort=COHORTS, csv=REGIONAL_CSVS),
         expand("{cohort}_{csv}.csv", cohort=COHORTS, csv=TREATMENT_STATS_CSVS),
         expand("figures/fig_{cohort}_{seg}_{fig}.png", cohort=COHORTS, fig=REGIONAL_SIG_FIGS, seg=config['segs']),
