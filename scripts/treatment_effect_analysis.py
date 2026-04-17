@@ -92,6 +92,9 @@ SEX_COL = sex_cfg["column"]
 
 VOL_THRESH_ML = cfg.get("volume_threshold_ml", 1e-4)
 
+# Fallback colour used when a category value is absent from the configured palette.
+DEFAULT_COLOR = "#888888"
+
 
 # ── Helper functions ─────────────────────────────────────────────────────────
 def compute_subject_metrics(plaque_df):
@@ -153,7 +156,7 @@ def interaction_plot_ax(ax, data, outcome, ylabel, yscale="linear"):
         .reset_index()
     )
     for geno, grp in agg.groupby(GENO_COL, observed=True):
-        color = GENO_PALETTE.get(geno, "#888888")
+        color = GENO_PALETTE.get(geno, DEFAULT_COLOR)
         ax.plot(grp[TREAT_COL].astype(str), grp["mean"],
                 marker="o", linewidth=2, color=color, label=geno)
         ax.errorbar(grp[TREAT_COL].astype(str), grp["mean"],

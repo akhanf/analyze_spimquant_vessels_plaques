@@ -127,7 +127,7 @@ def _alpha_cmap(hex_color, name):
 
 
 TREAT_CMAP = {
-    treat: _alpha_cmap(color, f"cmap_treat_{i}")
+    treat: _alpha_cmap(color, f"cmap_treat_{treat.replace(' ', '_').lower()}_{i}")
     for i, (treat, color) in enumerate(TREAT_PALETTE.items())
 }
 

@@ -55,6 +55,9 @@ SEX_COL = sex_cfg["column"]
 
 VOL_THRESH_ML = cfg.get("volume_threshold_ml", 1e-4)
 
+# Fallback colour used when a category value is absent from the configured palette.
+DEFAULT_COLOR = "#888888"
+
 treat_label = TREAT_COL.replace("_", " ").title()
 geno_label = GENO_COL.replace("_", " ").title()
 TAU_UM = 5.0
@@ -104,7 +107,6 @@ def subject_proximity_fractions(
     """Per-subject fraction in each vessel-relation class (wide format)."""
     if group_cols is None:
         group_cols = ("subject", GENO_COL, TREAT_COL, SEX_COL)
-    """Per-subject fraction in each vessel-relation class (wide format)."""
     counts = (
         plaque_df.groupby(list(group_cols) + ["vessel_relation"], observed=True)
         .size()
@@ -403,7 +405,7 @@ for ax, col in zip(axes, prox_int_cols):
         .reset_index()
     )
     for geno, grp in agg.groupby(GENO_COL, observed=True):
-        color = GENO_PALETTE.get(geno, "#888888")
+        color = GENO_PALETTE.get(geno, DEFAULT_COLOR)
         ax.plot(grp[TREAT_COL].astype(str), grp["mean"],
                 marker="o", linewidth=2, color=color, label=geno)
         ax.errorbar(grp[TREAT_COL].astype(str), grp["mean"],

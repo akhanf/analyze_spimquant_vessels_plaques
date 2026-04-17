@@ -93,6 +93,9 @@ TREAT_PALETTE = treat_cfg["palette"]
 GROUP1 = TREAT_ORDER[0]
 GROUP2 = TREAT_ORDER[1]
 
+# Fallback colour used when a category value is absent from the configured palette.
+DEFAULT_COLOR = "#888888"
+
 # ── Constants ────────────────────────────────────────────────────────────────
 FDR_ALPHA = 0.05
 N_LABEL = 10          # max labelled points in the volcano plot
@@ -219,7 +222,7 @@ dec_mask = stats_df["significant"] & (stats_df["log2fc"] < 0)
 ax.scatter(
     stats_df.loc[dec_mask, "log2fc"],
     stats_df.loc[dec_mask, "neg_log10_fdr"],
-    color=TREAT_PALETTE.get(GROUP1, "#4C72B0"), alpha=0.85, s=45, linewidths=0,
+    color=TREAT_PALETTE.get(GROUP1, DEFAULT_COLOR), alpha=0.85, s=45, linewidths=0,
     label=f"Significant decrease ({GROUP2} < {GROUP1})",
     zorder=3,
 )
@@ -229,7 +232,7 @@ inc_mask = stats_df["significant"] & (stats_df["log2fc"] >= 0)
 ax.scatter(
     stats_df.loc[inc_mask, "log2fc"],
     stats_df.loc[inc_mask, "neg_log10_fdr"],
-    color=TREAT_PALETTE.get(GROUP2, "#DD8452"), alpha=0.85, s=45, linewidths=0,
+    color=TREAT_PALETTE.get(GROUP2, DEFAULT_COLOR), alpha=0.85, s=45, linewidths=0,
     label=f"Significant increase ({GROUP2} > {GROUP1})",
     zorder=3,
 )
@@ -290,8 +293,8 @@ else:
     plot_df = sig_df.sort_values("log2fc").head(N_BAR_MAX).reset_index(drop=True)
 
     colors = [
-        TREAT_PALETTE.get(GROUP1, "#4C72B0") if fc < 0
-        else TREAT_PALETTE.get(GROUP2, "#DD8452")
+        TREAT_PALETTE.get(GROUP1, DEFAULT_COLOR) if fc < 0
+        else TREAT_PALETTE.get(GROUP2, DEFAULT_COLOR)
         for fc in plot_df["log2fc"]
     ]
 
@@ -329,9 +332,9 @@ else:
     from matplotlib.patches import Patch  # noqa: PLC0415
 
     legend_elements = [
-        Patch(facecolor=TREAT_PALETTE.get(GROUP1, "#4C72B0"),
+        Patch(facecolor=TREAT_PALETTE.get(GROUP1, DEFAULT_COLOR),
               label=f"{GROUP2} < {GROUP1} (reduction)"),
-        Patch(facecolor=TREAT_PALETTE.get(GROUP2, "#DD8452"),
+        Patch(facecolor=TREAT_PALETTE.get(GROUP2, DEFAULT_COLOR),
               label=f"{GROUP2} > {GROUP1} (increase)"),
     ]
     ax.legend(handles=legend_elements, fontsize=9, loc="upper right")
