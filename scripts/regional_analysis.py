@@ -42,15 +42,18 @@ cfg = snakemake.params.plot_config  # noqa: F821
 # ── Extract plot config ───────────────────────────────────────────────────────
 sns.set_theme(style="whitegrid", font_scale=1.1)
 
-treat_cfg = cfg["factors"]["treatment"]
+# factors[0] = primary factor (e.g. treatment), factors[1] = secondary (e.g. genotype).
+# Swapping entries in config.yml changes which factor plays which role.
+_factors = cfg["factors"]
+treat_cfg = _factors[0]
 TREAT_COL = treat_cfg["column"]
 TREAT_ORDER = treat_cfg["order"]
 TREAT_PALETTE = treat_cfg["palette"]
 
-geno_cfg = cfg["factors"]["genotype"]
-GENO_COL = geno_cfg["column"]
-GENO_ORDER = geno_cfg["order"]
-GENO_PALETTE = geno_cfg["palette"]
+geno_cfg = _factors[1] if len(_factors) > 1 else {}
+GENO_COL = geno_cfg.get("column", "")
+GENO_ORDER = geno_cfg.get("order", [])
+GENO_PALETTE = geno_cfg.get("palette", {})
 
 METRIC = cfg["primary_metric"]
 VOL_THRESH_ML = cfg.get("volume_threshold_ml", 1e-4)

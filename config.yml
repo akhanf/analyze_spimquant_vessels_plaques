@@ -15,10 +15,17 @@ segs:
   - coarse
 
 # ── Plot configuration ────────────────────────────────────────────────────────
-# Seaborn-style factor definitions.  Each named factor specifies:
+# Factor definitions as an ordered list.  Position determines role:
+#   index 0  : primary factor   (the main contrast, e.g. treatment)
+#   index 1  : secondary factor (grouping variable, e.g. genotype)
+#   index 2  : tertiary factor  (optional, e.g. sex)
+#
+# Each entry specifies:
 #   column  : the column name in the parquet data
 #   order   : ordered list of category values (first = reference / control)
 #   palette : mapping from category value to hex colour
+#
+# Swapping entries in the list changes which factor is treated as primary.
 #
 # primary_metric     : column used for the main statistical analysis
 #                      (fold-change, regional t-tests, ANOVA, etc.)
@@ -26,19 +33,16 @@ segs:
 #                      artefacts before any analysis or plotting.
 plot_config:
   factors:
-    treatment:
-      column: treatment
+    - column: treatment
       order: [PBS, Lecanemab]
       palette:
         PBS: "#4C72B0"
         Lecanemab: "#DD8452"
-    genotype:
-      column: genotype
+    - column: genotype
       order: [homo]
       palette:
         homo: "#55A868"
-    sex:
-      column: sex
+    - column: sex
       order: [M, F]
       palette:
         M: "#8172B2"

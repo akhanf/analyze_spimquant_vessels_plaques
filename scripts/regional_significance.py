@@ -28,24 +28,25 @@ import pandas as pd  # noqa: E402
 warnings.filterwarnings("ignore")
 
 # ── Default plot config (used when running outside Snakemake) ─────────────────
+# factors is an ordered list: index 0 = primary, 1 = secondary, 2 = tertiary.
 DEFAULT_PLOT_CONFIG = {
-    "factors": {
-        "treatment": {
+    "factors": [
+        {
             "column": "treatment",
             "order": ["PBS", "Lecanemab"],
             "palette": {"PBS": "#4C72B0", "Lecanemab": "#DD8452"},
         },
-        "genotype": {
+        {
             "column": "genotype",
             "order": ["ApoE3", "ApoE4"],
             "palette": {"ApoE3": "#55A868", "ApoE4": "#C44E52"},
         },
-        "sex": {
+        {
             "column": "sex",
             "order": ["M", "F"],
             "palette": {"M": "#8172B2", "F": "#CCB974"},
         },
-    },
+    ],
     "primary_metric": "plaque_density",
     "volume_threshold_ml": 1e-4,
 }
@@ -86,7 +87,10 @@ else:
     }
 
 # ── Extract plot config ───────────────────────────────────────────────────────
-treat_cfg = cfg["factors"]["treatment"]
+# factors[0] = primary factor (e.g. treatment).  Swapping entries in config.yml
+# changes which factor plays which role without touching this script.
+_factors = cfg["factors"]
+treat_cfg = _factors[0]
 TREAT_ORDER = treat_cfg["order"]
 TREAT_PALETTE = treat_cfg["palette"]
 
