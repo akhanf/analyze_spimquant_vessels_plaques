@@ -1,16 +1,18 @@
 datasets:
-  late:
-    participant_tsv: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_batch2/bids/participants.tsv
-    spimquant_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_batch2/derivatives/spimquant-v0.6.0rc2_84a605e_ozx
-  early:
-    participant_tsv: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_batch3/bids/participants.tsv
-    spimquant_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_batch3/derivatives/spimquant-v0.6.0rc2_84a605e_ozx
+#  batch1:
+#    participant_tsv: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch1/bids/participants.tsv
+#    spimquant_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch1/derivatives/spimquant-934adc6
+  batch2:
+    participant_tsv: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch2/bids/participants.tsv
+    spimquant_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch2/derivatives/spimquant-934adc6
+  batch3:
+    participant_tsv: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch3/bids/participants.tsv
+    spimquant_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch3/derivatives/spimquant-v0.7.0rc3-dd73d28
 
-template_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_batch3/derivatives/spimquant-v0.6.0rc2_84a605e_ozx/tpl-ABAv3
+
+template_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch1/derivatives/spimquant-934adc6/tpl-ABAv3
 segs:
-  - roi82
-  - roi198
-  - all
+  - coarse
 
 # ── Plot configuration ────────────────────────────────────────────────────────
 # Seaborn-style factor definitions.  Each named factor specifies:
@@ -32,10 +34,9 @@ plot_config:
         Lecanemab: "#DD8452"
     genotype:
       column: genotype
-      order: [ApoE3, ApoE4]
+      order: [homo]
       palette:
-        ApoE3: "#55A868"
-        ApoE4: "#C44E52"
+        homo: "#55A868"
     sex:
       column: sex
       order: [M, F]
