@@ -104,8 +104,8 @@ rule all:
 
 rule add_vol_to_dseg_tsv:
     input:
-        lut=lambda wildcards: Path(config['template_dir']) / "seg-{seg}_tpl-ABAv3_dseg.tsv",
-        nii=lambda wildcards: Path(config['template_dir']) / "seg-{seg}_tpl-ABAv3_dseg.nii.gz",
+        lut=lambda wildcards: Path(config['template_dir']) / "tpl-ABAv3_seg-{seg}_dseg.tsv",
+        nii=lambda wildcards: Path(config['template_dir']) / "tpl-ABAv3_seg-{seg}_dseg.nii.gz",
     output:
         lut="tpl-ABAv3_seg-{seg}_dseg.tsv"
     script:
@@ -142,7 +142,7 @@ rule regional_dataframe:
 rule regional_analysis:
     input:
         roi_parquet="roi_data_{cohort}_seg-{seg}.parquet",
-        atlas=lambda wildcards: Path(config['datasets'][wildcards.cohort]['spimquant_dir']) / "tpl-ABAv3"  / "seg-{seg}_tpl-ABAv3_dseg.nii.gz",
+        atlas=lambda wildcards: Path(config['datasets'][wildcards.cohort]['spimquant_dir']) / "tpl-ABAv3"  / "tpl-ABAv3_seg-{seg}_dseg.nii.gz",
     params:
         plot_config=config['plot_config'],
     output:
@@ -242,7 +242,7 @@ rule treatment_stats:
 rule regional_significance:
     input:
         stats_csv="{cohort}_{seg}_roi_treatment_stats.csv",
-        atlas=lambda wildcards: Path(config['datasets'][wildcards.cohort]['spimquant_dir']) / "tpl-ABAv3" / "seg-{seg}_tpl-ABAv3_dseg.nii.gz",
+        atlas=lambda wildcards: Path(config['datasets'][wildcards.cohort]['spimquant_dir']) / "tpl-ABAv3" / "tpl-ABAv3_seg-{seg}_dseg.nii.gz",
     params:
         plot_config=config['plot_config'],
     output:
