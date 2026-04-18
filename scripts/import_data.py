@@ -28,7 +28,7 @@ VOXEL_VOL_ML = 0.0016 * 0.0016 * 0.00275  # mL per voxel
 def load_subject_df(spimquant_dir: str, subject: str) -> pd.DataFrame | None:
     regionpropstats_tsv = (
         f"{spimquant_dir}/{subject}/tabular/"
-        f"{subject}_sample-brain_acq-imaris4x_stain-Abeta_seg-coarse_"
+        f"{subject}_sample-brain_acq-imaris4x_stain-Abeta_seg-all_"
         f"from-ABAv3_level-5_desc-otsu+k3i2_regionpropstats.tsv"
     )
     if not Path(regionpropstats_tsv).exists():
