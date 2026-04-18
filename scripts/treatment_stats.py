@@ -88,8 +88,8 @@ GENO_COL = geno_cfg.get("column", "")
 GENO_ORDER = geno_cfg.get("order", [])
 GENO_PALETTE = geno_cfg.get("palette", {})
 
-_sex_cfg = _factors[2] if len(_factors) > 2 else {}
-SEX_COL = _sex_cfg.get("column", "")
+sex_cfg = _factors[2] if len(_factors) > 2 else {}
+SEX_COL = sex_cfg.get("column", "")
 
 VOL_THRESH_ML = cfg.get("volume_threshold_ml", 1e-4)
 FDR_ALPHA = 0.05
