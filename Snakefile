@@ -16,8 +16,6 @@
 configfile: 'config.yml'
 
 
-wildcard_constraints:
-    cohort='[0-9a-zA-Z]+'
 
 # ── Cohorts ───────────────────────────────────────────────────────────────────
 COHORTS = config['datasets'].keys()
@@ -102,6 +100,15 @@ rule all:
         expand("figures/fig_{cohort}_{seg}_{fig}.png", cohort=COHORTS, fig=REGIONAL_SIG_FIGS, seg=config['segs']),
 
 
+rule all_indiv:
+    input:
+        expand("figures/fig_{cohort}_{fig}.png", cohort=COHORTS, fig=TREATMENT_FIGS+TREATMENT_STATS_FIGS),
+
+
+rule all_concat:
+    input:
+        expand("figures/fig_{cohort}_{fig}.png", cohort="+".join(COHORTS), fig=TREATMENT_FIGS+TREATMENT_STATS_FIGS),
+
 rule add_vol_to_dseg_tsv:
     input:
         lut=lambda wildcards: Path(config['template_dir']) / "tpl-ABAv3_seg-{seg}_dseg.tsv",
@@ -117,12 +124,21 @@ rule import_data:
         participant_tsv=lambda wc: config.get("datasets", {}).get(wc.cohort, {}).get("participant_tsv", ""),
         spimquant_dir=lambda wc: config.get("datasets", {}).get(wc.cohort, {}).get("spimquant_dir", ""),
     output:
-        "data_{cohort}.parquet",
+        "data_{cohort,[a-zA-Z0-9]+}.parquet",
     params:
     log:
         "logs/import_data_{cohort}.log",
     script:
         "scripts/import_data.py"
+
+rule concat_datasets:
+    input:
+        expand("data_{cohort}.parquet",cohort=COHORTS)
+    output:
+        "data_{cohort,[a-zA-Z0-9+]+}.parquet",
+    run:
+        import pandas as pd
+        merged_df = pd.concat([pd.read_parquet(pq) for pq in input], ignore_index=True).to_parquet(output[0],index=False)
 
 
 # ── ROI aggregation ───────────────────────────────────────────────────────────
@@ -163,10 +179,23 @@ rule regional_analysis:
         "scripts/regional_analysis.py"
 
 
+rule compute_subject_metrics:
+    input:
+        parquet="data_{cohort}.parquet"
+    params:
+        plot_config=config['plot_config'],
+    output:
+        tsv="data_subject_{cohort}.tsv"
+    script:
+        "scripts/compute_subject_metrics.py"
+
+
+
+
 # ── Treatment-effect figures ──────────────────────────────────────────────────
 rule treatment_analysis:
     input:
-        parquet="data_{cohort}.parquet",
+        parquet="data_{cohort}.parquet"
     params:
         plot_config=config['plot_config'],
     output:
@@ -180,6 +209,7 @@ rule treatment_analysis:
         "logs/treatment_analysis_{cohort}.log",
     script:
         "scripts/treatment_effect_analysis.py"
+
 
 
 # ── Vessel-proximity figures ──────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 datasets:
-#  batch1:
-#    participant_tsv: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch1/bids/participants.tsv
-#    spimquant_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch1/derivatives/spimquant-934adc6
+  batch1:
+    participant_tsv: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch1/bids/participants.tsv
+    spimquant_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch1/derivatives/spimquant-934adc6
   batch2:
     participant_tsv: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch2/bids/participants.tsv
     spimquant_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch2/derivatives/spimquant-934adc6
@@ -38,15 +38,16 @@ plot_config:
       palette:
         PBS: "#4C72B0"
         Lecanemab: "#DD8452"
-    - column: genotype
-      order: [homo]
-      palette:
-        homo: "#55A868"
     - column: sex
       order: [M, F]
       palette:
         M: "#8172B2"
         F: "#CCB974"
+    - column: genotype
+      order: [homo]
+      palette:
+        homo: "#55A868"
+
   primary_metric: plaque_density
   volume_threshold_ml: 1.0e-4
 
