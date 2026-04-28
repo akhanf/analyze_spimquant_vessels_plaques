@@ -100,6 +100,7 @@ rule all:
 #        expand("{cohort}_{csv}.csv", cohort=COHORTS, csv=REGIONAL_CSVS),
         expand("{cohort}_{csv}.csv", cohort=COHORTS, csv=TREATMENT_STATS_CSVS),
         expand("figures/fig_{cohort}_{seg}_{fig}.png", cohort=COHORTS, fig=REGIONAL_SIG_FIGS, seg=config['segs']),
+        "figures/fig_combined_treatment_effect.png",
 
 
 rule add_vol_to_dseg_tsv:
@@ -228,6 +229,18 @@ rule treatment_stats:
         "logs/treatment_stats_{cohort}.log",
     script:
         "scripts/treatment_stats.py"
+
+
+# ── Combined multipanel treatment-effect figure (all batches × genotypes) ────
+rule combined_treatment_effect:
+    input:
+        **{cohort: f"data_{cohort}.parquet" for cohort in COHORTS}
+    output:
+        "figures/fig_combined_treatment_effect.png"
+    log:
+        "logs/combined_treatment_effect.log",
+    script:
+        "scripts/combined_treatment_effect.py"
 
 
 # ── Regional significance visualizations ─────────────────────────────────────
