@@ -1,14 +1,53 @@
 datasets:
-  late:
-    participant_tsv: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_batch2/bids/participants.tsv
-    spimquant_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_batch2/derivatives/spimquant-v0.6.0rc2_84a605e_ozx
-  early:
-    participant_tsv: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_batch3/bids/participants.tsv
-    spimquant_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_batch3/derivatives/spimquant-v0.6.0rc2_84a605e_ozx
+  batch1:
+    participant_tsv: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch1/bids/participants.tsv
+    spimquant_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch1/derivatives/spimquant-934adc6
+  batch2:
+    participant_tsv: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch2/bids/participants.tsv
+    spimquant_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch2/derivatives/spimquant-934adc6
+  batch3:
+    participant_tsv: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch3/bids/participants.tsv
+    spimquant_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch3/derivatives/spimquant-v0.7.0rc3-dd73d28
 
-template_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_batch3/derivatives/spimquant-v0.6.0rc2_84a605e_ozx/tpl-ABAv3
+
+template_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch1/derivatives/spimquant-934adc6/tpl-ABAv3
 segs:
-  - roi82
-  - roi198
-  - all
+  - coarse
+
+# ── Plot configuration ────────────────────────────────────────────────────────
+# Factor definitions as an ordered list.  Position determines role:
+#   index 0  : primary factor   (the main contrast, e.g. treatment)
+#   index 1  : secondary factor (grouping variable, e.g. genotype)
+#   index 2  : tertiary factor  (optional, e.g. sex)
+#
+# Each entry specifies:
+#   column  : the column name in the parquet data
+#   order   : ordered list of category values (first = reference / control)
+#   palette : mapping from category value to hex colour
+#
+# Swapping entries in the list changes which factor is treated as primary.
+#
+# primary_metric     : column used for the main statistical analysis
+#                      (fold-change, regional t-tests, ANOVA, etc.)
+# volume_threshold_ml: plaques larger than this value are filtered out as
+#                      artefacts before any analysis or plotting.
+plot_config:
+  factors:
+    - column: treatment
+      order: [PBS, Lecanemab]
+      palette:
+        PBS: "#4C72B0"
+        Lecanemab: "#DD8452"
+    - column: sex
+      order: [M, F]
+      palette:
+        M: "#8172B2"
+        F: "#CCB974"
+    - column: genotype
+      order: [homo]
+      palette:
+        homo: "#55A868"
+
+  primary_metric: plaque_density
+  volume_threshold_ml: 1.0e-4
 

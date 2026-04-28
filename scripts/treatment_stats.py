@@ -24,11 +24,36 @@ from statsmodels.stats.multicomp import pairwise_tukeyhsd  # noqa: E402
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
+# ── Default plot config (used when running outside Snakemake) ─────────────────
+# factors is an ordered list: index 0 = primary, 1 = secondary, 2 = tertiary.
+DEFAULT_PLOT_CONFIG = {
+    "factors": [
+        {
+            "column": "treatment",
+            "order": ["PBS", "Lecanemab"],
+            "palette": {"PBS": "#4C72B0", "Lecanemab": "#DD8452"},
+        },
+        {
+            "column": "genotype",
+            "order": ["ApoE3", "ApoE4"],
+            "palette": {"ApoE3": "#55A868", "ApoE4": "#C44E52"},
+        },
+        {
+            "column": "sex",
+            "order": ["M", "F"],
+            "palette": {"M": "#8172B2", "F": "#CCB974"},
+        },
+    ],
+    "primary_metric": "plaque_density",
+    "volume_threshold_ml": 1e-4,
+}
+
 # ── Snakemake integration ────────────────────────────────────────────────────
 if "snakemake" in dir():
     input_parquet = str(snakemake.input.parquet)  # noqa: F821
     output_figs = dict(snakemake.output)  # noqa: F821
     cohort = snakemake.wildcards.cohort  # noqa: F821
+    cfg = snakemake.params.plot_config  # noqa: F821
 else:
     import argparse
 
@@ -39,20 +64,38 @@ else:
     args = parser.parse_args()
     input_parquet = args.parquet
     cohort = args.cohort
+    cfg = DEFAULT_PLOT_CONFIG
     output_figs = {
         "treatment_stats_boxplots": f"{args.output_dir}/fig_{cohort}_treatment_stats_boxplots.png",
         "treatment_anova_table": f"{args.output_dir}/{cohort}_treatment_anova_table.csv",
         "treatment_tukey_results": f"{args.output_dir}/{cohort}_treatment_tukey_results.csv",
     }
 
-# ── Constants ────────────────────────────────────────────────────────────────
+# ── Extract plot config ───────────────────────────────────────────────────────
 sns.set_theme(style="whitegrid", font_scale=1.1)
-TREAT_ORDER = ["PBS", "Lecanemab"]
-TREAT_PALETTE = {"PBS": "#4C72B0", "Lecanemab": "#DD8452"}
-GENO_ORDER = ["ApoE3", "ApoE4"]
-GENO_PALETTE = {"ApoE3": "#55A868", "ApoE4": "#C44E52"}
-VOL_THRESH_ML = 1e-4
+
+# factors[0] = primary factor (e.g. treatment), factors[1] = secondary (e.g. genotype),
+# factors[2] = tertiary (e.g. sex).  Swapping entries in config.yml changes which
+# factor plays which role without touching any script.
+_factors = cfg["factors"]
+treat_cfg = _factors[0]
+TREAT_COL = treat_cfg["column"]
+TREAT_ORDER = treat_cfg["order"]
+TREAT_PALETTE = treat_cfg["palette"]
+
+geno_cfg = _factors[1] if len(_factors) > 1 else {}
+GENO_COL = geno_cfg.get("column", "")
+GENO_ORDER = geno_cfg.get("order", [])
+GENO_PALETTE = geno_cfg.get("palette", {})
+
+sex_cfg = _factors[2] if len(_factors) > 2 else {}
+SEX_COL = sex_cfg.get("column", "")
+
+VOL_THRESH_ML = cfg.get("volume_threshold_ml", 1e-4)
 FDR_ALPHA = 0.05
+
+treat_label = TREAT_COL.replace("_", " ").title()
+geno_label = GENO_COL.replace("_", " ").title()
 
 METRICS = [
     ("plaque_count", "Total plaque count"),
@@ -91,7 +134,7 @@ def add_significance_bracket(ax, x1, x2, y, h, stars, color="black", lw=1.2,
 def compute_subject_metrics(plaque_df):
     """Aggregate plaque-level data to one row per subject."""
     grp = plaque_df.groupby(
-        ["subject", "treatment", "genotype", "sex"], observed=True
+        ["subject", TREAT_COL, GENO_COL, SEX_COL], observed=True
     )
     metrics = grp.agg(
         plaque_count=("nvoxels", "size"),
@@ -111,12 +154,12 @@ def compute_subject_metrics(plaque_df):
 
 
 def run_twoway_anova(data, outcome):
-    """Two-way OLS ANOVA (or one-way when only one genotype present)."""
-    n_geno = data["genotype"].nunique()
+    """Two-way OLS ANOVA (or one-way when only one group present)."""
+    n_geno = data[GENO_COL].nunique()
     if n_geno > 1:
-        formula = f"{outcome} ~ C(treatment) * C(genotype)"
+        formula = f"{outcome} ~ C({TREAT_COL}) * C({GENO_COL})"
     else:
-        formula = f"{outcome} ~ C(treatment)"
+        formula = f"{outcome} ~ C({TREAT_COL})"
     model = ols(formula, data=data).fit()
     return anova_lm(model, typ=2)
 
@@ -124,14 +167,18 @@ def run_twoway_anova(data, outcome):
 # ── Load and prepare data ────────────────────────────────────────────────────
 df_raw = pd.read_parquet(input_parquet)
 df = df_raw.loc[df_raw["plaque_vol_ml"] <= VOL_THRESH_ML].copy()
-df["treatment"] = pd.Categorical(df["treatment"], categories=TREAT_ORDER, ordered=True)
-geno_present = [g for g in GENO_ORDER if (df["genotype"] == g).any()]
-df["genotype"] = pd.Categorical(df["genotype"], categories=geno_present, ordered=True)
+df[TREAT_COL] = pd.Categorical(df[TREAT_COL], categories=TREAT_ORDER, ordered=True)
+geno_present = [g for g in GENO_ORDER if (df[GENO_COL] == g).any()]
+df[GENO_COL] = pd.Categorical(df[GENO_COL], categories=geno_present, ordered=True)
 geno_palette = {g: GENO_PALETTE[g] for g in geno_present}
 n_geno = len(geno_present)
 
 subj = compute_subject_metrics(df)
-subj["genotype"] = pd.Categorical(subj["genotype"], categories=geno_present, ordered=True)
+subj[GENO_COL] = pd.Categorical(subj[GENO_COL], categories=geno_present, ordered=True)
+
+# Shorthand for the two treatment group labels (group1 = control, group2 = treatment)
+GROUP1 = TREAT_ORDER[0]
+GROUP2 = TREAT_ORDER[1]
 
 # ── Two-way ANOVA table ───────────────────────────────────────────────────────
 anova_rows = []
@@ -165,7 +212,7 @@ if n_geno > 1:
     for col, label in METRICS:
         try:
             d = subj.copy()
-            d["group"] = d["treatment"].astype(str) + " | " + d["genotype"].astype(str)
+            d["group"] = d[TREAT_COL].astype(str) + " | " + d[GENO_COL].astype(str)
             tukey = pairwise_tukeyhsd(d[col], d["group"], alpha=FDR_ALPHA)
             result_data = tukey._results_table.data
             hdr = [str(c) for c in result_data[0]]
@@ -178,18 +225,18 @@ if n_geno > 1:
         except Exception:
             pass
 else:
-    # Welch's t-test between PBS and Lecanemab
+    # Welch's t-test between the two treatment groups
     for col, label in METRICS:
-        pbs_vals = subj.loc[subj["treatment"] == "PBS", col].dropna().values
-        lec_vals = subj.loc[subj["treatment"] == "Lecanemab", col].dropna().values
-        if len(pbs_vals) >= 2 and len(lec_vals) >= 2:
-            t_stat, p_val = stats.ttest_ind(lec_vals, pbs_vals, equal_var=False)
+        group1_vals = subj.loc[subj[TREAT_COL] == GROUP1, col].dropna().values
+        group2_vals = subj.loc[subj[TREAT_COL] == GROUP2, col].dropna().values
+        if len(group1_vals) >= 2 and len(group2_vals) >= 2:
+            t_stat, p_val = stats.ttest_ind(group2_vals, group1_vals, equal_var=False)
             pairwise_rows.append({
                 "metric": col,
                 "metric_label": label,
-                "group1": "PBS",
-                "group2": "Lecanemab",
-                "meandiff": float(np.mean(lec_vals) - np.mean(pbs_vals)),
+                "group1": GROUP1,
+                "group2": GROUP2,
+                "meandiff": float(np.mean(group2_vals) - np.mean(group1_vals)),
                 "p-adj": float(p_val),
                 "reject": bool(p_val <= FDR_ALPHA),
                 "stars": pval_to_stars(p_val),
@@ -201,7 +248,7 @@ pairwise_df.to_csv(output_figs["treatment_tukey_results"], index=False)
 
 # ── Boxplots with significance brackets ──────────────────────────────────────
 # Layout: n_geno rows (one per genotype) × n_metrics columns.
-# Each subplot shows PBS vs Lecanemab for that genotype with a significance bracket.
+# Each subplot shows GROUP1 vs GROUP2 for that genotype with a significance bracket.
 n_metrics = len(METRICS)
 fig, axes = plt.subplots(
     n_geno, n_metrics,
@@ -210,31 +257,31 @@ fig, axes = plt.subplots(
 )
 
 for row_idx, geno in enumerate(geno_present):
-    g = subj[subj["genotype"] == geno]
+    g = subj[subj[GENO_COL] == geno]
     for col_idx, (col, label) in enumerate(METRICS):
         ax = axes[row_idx, col_idx]
 
         sns.boxplot(
-            data=g, x="treatment", y=col,
+            data=g, x=TREAT_COL, y=col,
             order=TREAT_ORDER, palette=TREAT_PALETTE,
             fill=False, linewidth=1.2, fliersize=0, ax=ax,
         )
         sns.stripplot(
-            data=g, x="treatment", y=col,
+            data=g, x=TREAT_COL, y=col,
             order=TREAT_ORDER, palette=TREAT_PALETTE,
             alpha=0.75, size=7, jitter=True, ax=ax,
         )
 
         # Compute Welch's t-test for this genotype
-        pbs_vals = g.loc[g["treatment"] == "PBS", col].dropna().values
-        lec_vals = g.loc[g["treatment"] == "Lecanemab", col].dropna().values
+        group1_vals = g.loc[g[TREAT_COL] == GROUP1, col].dropna().values
+        group2_vals = g.loc[g[TREAT_COL] == GROUP2, col].dropna().values
         stars = "ns"
         p_val = np.nan
-        if len(pbs_vals) >= 2 and len(lec_vals) >= 2:
-            _, p_val = stats.ttest_ind(lec_vals, pbs_vals, equal_var=False)
+        if len(group1_vals) >= 2 and len(group2_vals) >= 2:
+            _, p_val = stats.ttest_ind(group2_vals, group1_vals, equal_var=False)
             stars = pval_to_stars(p_val)
 
-        # Draw significance bracket between PBS (x=0) and Lecanemab (x=1)
+        # Draw significance bracket between GROUP1 (x=0) and GROUP2 (x=1)
         all_vals = g[col].dropna().values
         if len(all_vals) > 0:
             y_max = float(np.max(all_vals))
@@ -254,7 +301,7 @@ for row_idx, geno in enumerate(geno_present):
             ax.set_title(label, fontsize=11, pad=8)
         ax.text(
             0.98, 0.02,
-            f"n={len(pbs_vals)} PBS / {len(lec_vals)} Lec",
+            f"n={len(group1_vals)} {GROUP1} / {len(group2_vals)} {GROUP2}",
             transform=ax.transAxes, ha="right", va="bottom",
             fontsize=8, color="gray",
         )
@@ -264,7 +311,7 @@ for row_idx, geno in enumerate(geno_present):
     )
 
 fig.suptitle(
-    f"Treatment effect (PBS vs Lecanemab) by genotype \u2014 {cohort}\n"
+    f"{treat_label} effect ({GROUP1} vs {GROUP2}) by {geno_label} \u2014 {cohort}\n"
     "* p\u22640.05  ** p\u22640.01  *** p\u22640.001  **** p\u22640.0001  ns\u2009=\u2009not significant",
     fontsize=13, y=1.01,
 )

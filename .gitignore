@@ -12,4 +12,7 @@ logs/
 __pycache__/
 *.pyc
 
-
+figures
+*.csv
+*.parquet
+*.tsv

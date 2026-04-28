@@ -35,14 +35,35 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 input_parquet = str(snakemake.input.parquet)  # noqa: F821
 output_figs = dict(snakemake.output)  # noqa: F821
 cohort = snakemake.wildcards.cohort  # noqa: F821
+cfg = snakemake.params.plot_config  # noqa: F821
 
-# ── Constants ────────────────────────────────────────────────────────────────
+# ── Extract plot config ───────────────────────────────────────────────────────
 sns.set_theme(style="whitegrid", font_scale=1.1)
-TREAT_ORDER = ["PBS", "Lecanemab"]
-TREAT_PALETTE = {"PBS": "#4C72B0", "Lecanemab": "#DD8452"}
-GENO_ORDER = ["ApoE3", "ApoE4"]
-GENO_PALETTE = {"ApoE3": "#55A868", "ApoE4": "#C44E52"}
-VOL_THRESH_ML = 1e-4
+
+# factors[0] = primary factor (e.g. treatment), factors[1] = secondary (e.g. genotype),
+# factors[2] = tertiary (e.g. sex).  Swapping entries in config.yml changes which
+# factor plays which role without touching any script.
+_factors = cfg["factors"]
+treat_cfg = _factors[0]
+TREAT_COL = treat_cfg["column"]
+TREAT_ORDER = treat_cfg["order"]
+TREAT_PALETTE = treat_cfg["palette"]
+
+geno_cfg = _factors[1] if len(_factors) > 1 else {}
+GENO_COL = geno_cfg.get("column", "")
+GENO_ORDER = geno_cfg.get("order", [])
+GENO_PALETTE = geno_cfg.get("palette", {})
+
+sex_cfg = _factors[2] if len(_factors) > 2 else {}
+SEX_COL = sex_cfg.get("column", "")
+
+VOL_THRESH_ML = cfg.get("volume_threshold_ml", 1e-4)
+
+# Fallback colour used when a category value is absent from the configured palette.
+DEFAULT_COLOR = "#888888"
+
+treat_label = TREAT_COL.replace("_", " ").title()
+geno_label = GENO_COL.replace("_", " ").title()
 TAU_UM = 5.0
 VESSEL_BINS_UM = [0, 10, 20, np.inf]
 VESSEL_BIN_LABELS = ["<10 \u00b5m", "10\u201320 \u00b5m", ">20 \u00b5m"]
@@ -85,9 +106,11 @@ def classify_plaques(
 
 def subject_proximity_fractions(
     plaque_df,
-    group_cols=("subject", "genotype", "treatment", "sex"),
+    group_cols=None,
 ):
     """Per-subject fraction in each vessel-relation class (wide format)."""
+    if group_cols is None:
+        group_cols = ("subject", GENO_COL, TREAT_COL, SEX_COL)
     counts = (
         plaque_df.groupby(list(group_cols) + ["vessel_relation"], observed=True)
         .size()
@@ -140,12 +163,12 @@ def boxstrip(ax, data, x, y, hue=None, order=None, hue_order=None, palette=None,
 
 
 def run_twoway_anova(data, outcome):
-    """Two-way OLS ANOVA (or one-way when only one genotype present)."""
-    n_geno = data["genotype"].nunique()
+    """Two-way OLS ANOVA (or one-way when only one group present)."""
+    n_geno = data[GENO_COL].nunique()
     if n_geno > 1:
-        formula = f"{outcome} ~ C(treatment) * C(genotype)"
+        formula = f"{outcome} ~ C({TREAT_COL}) * C({GENO_COL})"
     else:
-        formula = f"{outcome} ~ C(treatment)"
+        formula = f"{outcome} ~ C({TREAT_COL})"
     model = ols(formula, data=data).fit()
     return anova_lm(model, typ=2)
 
@@ -153,9 +176,9 @@ def run_twoway_anova(data, outcome):
 # ── Load and prepare data ────────────────────────────────────────────────────
 df_raw = pd.read_parquet(input_parquet)
 df = df_raw.loc[df_raw["plaque_vol_ml"] <= VOL_THRESH_ML].copy()
-df["treatment"] = pd.Categorical(df["treatment"], categories=TREAT_ORDER, ordered=True)
-geno_present = [g for g in GENO_ORDER if (df["genotype"] == g).any()]
-df["genotype"] = pd.Categorical(df["genotype"], categories=geno_present, ordered=True)
+df[TREAT_COL] = pd.Categorical(df[TREAT_COL], categories=TREAT_ORDER, ordered=True)
+geno_present = [g for g in GENO_ORDER if (df[GENO_COL] == g).any()]
+df[GENO_COL] = pd.Categorical(df[GENO_COL], categories=geno_present, ordered=True)
 geno_palette = {g: GENO_PALETTE[g] for g in geno_present}
 n_geno = len(geno_present)
 
@@ -177,8 +200,8 @@ fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 for ax, (hue, order, palette) in zip(
     axes,
     [
-        ("treatment", TREAT_ORDER, TREAT_PALETTE),
-        ("genotype", geno_present, geno_palette),
+        (TREAT_COL, TREAT_ORDER, TREAT_PALETTE),
+        (GENO_COL, geno_present, geno_palette),
     ],
 ):
     sns.ecdfplot(data=df, x="sdt_CD31_um", hue=hue,
@@ -187,10 +210,10 @@ for ax, (hue, order, palette) in zip(
     ax.set_ylabel("Cumulative fraction")
     ax.axvline(0, color="k", linewidth=0.8, linestyle="--")
     ax.set_xlim(-100, 200)
-axes[0].set_title("By treatment")
-axes[1].set_title("By genotype")
+axes[0].set_title(f"By {treat_label}")
+axes[1].set_title(f"By {geno_label}")
 fig.suptitle(
-    f"SDT distribution by treatment/genotype \u2014 {cohort}", fontsize=13
+    f"SDT distribution by {treat_label}/{geno_label} \u2014 {cohort}", fontsize=13
 )
 plt.tight_layout()
 plt.savefig(output_figs["sdt_ecdf"], dpi=150, bbox_inches="tight")
@@ -200,45 +223,43 @@ plt.close(fig)
 # groups with more subjects do not dominate the bar heights.
 subj_stacked_counts = (
     df.groupby(
-        ["subject", "treatment", "genotype", "vessel_relation"], observed=True
+        ["subject", TREAT_COL, GENO_COL, "vessel_relation"], observed=True
     )
     .size()
     .rename("n")
     .reset_index()
 )
 subj_stacked_totals = (
-    df.groupby(["subject", "treatment", "genotype"], observed=True)
+    df.groupby(["subject", TREAT_COL, GENO_COL], observed=True)
     .size()
     .rename("n_total")
     .reset_index()
 )
 subj_stacked_fracs = subj_stacked_counts.merge(
-    subj_stacked_totals, on=["subject", "treatment", "genotype"]
+    subj_stacked_totals, on=["subject", TREAT_COL, GENO_COL]
 )
 subj_stacked_fracs["fraction"] = subj_stacked_fracs["n"] / subj_stacked_fracs["n_total"]
-# Pivot to wide then melt so subjects with zero plaques in a category
-# contribute 0 to the group mean rather than being absent.
 subj_stacked_wide = subj_stacked_fracs.pivot_table(
-    index=["subject", "treatment", "genotype"],
+    index=["subject", TREAT_COL, GENO_COL],
     columns="vessel_relation",
     values="fraction",
     fill_value=0.0,
 ).reset_index()
 subj_stacked_wide.columns.name = None
 subj_stacked_long = subj_stacked_wide.melt(
-    id_vars=["subject", "treatment", "genotype"],
+    id_vars=["subject", TREAT_COL, GENO_COL],
     var_name="vessel_relation",
     value_name="fraction",
 )
 prop_df = (
     subj_stacked_long.groupby(
-        ["treatment", "genotype", "vessel_relation"], observed=True
+        [TREAT_COL, GENO_COL, "vessel_relation"], observed=True
     )["fraction"]
     .mean()
     .reset_index()
 )
 prop_df["group"] = (
-    prop_df["treatment"].astype(str) + " | " + prop_df["genotype"].astype(str)
+    prop_df[TREAT_COL].astype(str) + " | " + prop_df[GENO_COL].astype(str)
 )
 
 groups = prop_df["group"].unique().tolist()
@@ -278,7 +299,7 @@ plt.close(fig)
 # ── Grouped bar chart: subject-level counts with error bars ──────────────────
 subj_count_df = (
     df.groupby(
-        ["subject", "treatment", "genotype", "vessel_relation"], observed=True
+        ["subject", TREAT_COL, GENO_COL, "vessel_relation"], observed=True
     )
     .size()
     .rename("n")
@@ -286,15 +307,15 @@ subj_count_df = (
 )
 subj_count_agg = (
     subj_count_df.groupby(
-        ["treatment", "genotype", "vessel_relation"], observed=True
+        [TREAT_COL, GENO_COL, "vessel_relation"], observed=True
     )["n"]
     .agg(["mean", "sem"])
     .reset_index()
 )
 subj_count_agg["group"] = (
-    subj_count_agg["treatment"].astype(str)
+    subj_count_agg[TREAT_COL].astype(str)
     + " | "
-    + subj_count_agg["genotype"].astype(str)
+    + subj_count_agg[GENO_COL].astype(str)
 )
 fig, ax = plt.subplots(figsize=(9, 5))
 n_cats = len(relation_categories)
@@ -337,8 +358,8 @@ plt.savefig(output_figs["proximity_counts_stacked"], dpi=150, bbox_inches="tight
 plt.close(fig)
 
 subj_prox = subject_proximity_fractions(df)
-subj_prox["genotype"] = pd.Categorical(
-    subj_prox["genotype"], categories=geno_present, ordered=True
+subj_prox[GENO_COL] = pd.Categorical(
+    subj_prox[GENO_COL], categories=geno_present, ordered=True
 )
 prox_frac_cols = [c for c in subj_prox.columns if c.startswith("frac_")]
 
@@ -350,14 +371,14 @@ if len(prox_frac_cols) == 1:
 for ax, col in zip(axes, prox_frac_cols):
     label = col.replace("frac_", "").replace("_", " ")
     if n_geno > 1:
-        boxstrip(ax, subj_prox, x="treatment", y=col, hue="genotype",
+        boxstrip(ax, subj_prox, x=TREAT_COL, y=col, hue=GENO_COL,
                  order=TREAT_ORDER, hue_order=geno_present, palette=geno_palette,
                  ylabel=f"Fraction {label}")
     else:
-        sns.boxplot(data=subj_prox, x="treatment", y=col, order=TREAT_ORDER,
+        sns.boxplot(data=subj_prox, x=TREAT_COL, y=col, order=TREAT_ORDER,
                     palette=TREAT_PALETTE, fill=False, linewidth=1.2, fliersize=0,
                     ax=ax)
-        sns.stripplot(data=subj_prox, x="treatment", y=col, order=TREAT_ORDER,
+        sns.stripplot(data=subj_prox, x=TREAT_COL, y=col, order=TREAT_ORDER,
                       palette=TREAT_PALETTE, alpha=0.7, size=6, jitter=True, ax=ax)
         ax.set_ylabel(f"Fraction {label}")
     ax.set_xlabel("")
@@ -370,8 +391,8 @@ plt.savefig(output_figs["proximity_fractions"], dpi=150, bbox_inches="tight")
 plt.close(fig)
 
 subj_prox_int = subject_proximity_fractions(df)
-subj_prox_int["genotype"] = pd.Categorical(
-    subj_prox_int["genotype"], categories=geno_present, ordered=True
+subj_prox_int[GENO_COL] = pd.Categorical(
+    subj_prox_int[GENO_COL], categories=geno_present, ordered=True
 )
 prox_int_cols = [c for c in subj_prox_int.columns if c.startswith("frac_")]
 
@@ -383,19 +404,19 @@ if len(prox_int_cols) == 1:
 for ax, col in zip(axes, prox_int_cols):
     label = col.replace("frac_", "").replace("_", " ")
     agg = (
-        subj_prox_int.groupby(["treatment", "genotype"], observed=True)[col]
+        subj_prox_int.groupby([TREAT_COL, GENO_COL], observed=True)[col]
         .agg(["mean", "sem"])
         .reset_index()
     )
-    for geno, grp in agg.groupby("genotype", observed=True):
-        color = GENO_PALETTE[geno]
-        ax.plot(grp["treatment"].astype(str), grp["mean"],
+    for geno, grp in agg.groupby(GENO_COL, observed=True):
+        color = GENO_PALETTE.get(geno, DEFAULT_COLOR)
+        ax.plot(grp[TREAT_COL].astype(str), grp["mean"],
                 marker="o", linewidth=2, color=color, label=geno)
-        ax.errorbar(grp["treatment"].astype(str), grp["mean"],
+        ax.errorbar(grp[TREAT_COL].astype(str), grp["mean"],
                     yerr=grp["sem"], fmt="none", color=color, capsize=4)
     ax.set_ylabel(f"Fraction {label}")
-    ax.set_xlabel("Treatment")
-    ax.legend(title="Genotype", fontsize=9)
+    ax.set_xlabel(treat_label)
+    ax.legend(title=geno_label, fontsize=9)
     ax.set_title(label)
 fig.suptitle(
     f"Proximity interaction plots \u2014 {cohort}", fontsize=13
@@ -409,8 +430,8 @@ fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 for ax, (hue, order, palette) in zip(
     axes,
     [
-        ("treatment", TREAT_ORDER, TREAT_PALETTE),
-        ("genotype", geno_present, geno_palette),
+        (TREAT_COL, TREAT_ORDER, TREAT_PALETTE),
+        (GENO_COL, geno_present, geno_palette),
     ],
 ):
     sns.ecdfplot(data=df_inside, x="min_vessel_diam_um",
@@ -418,8 +439,8 @@ for ax, (hue, order, palette) in zip(
     ax.set_xlabel("Estimated min vessel diameter (\u00b5m)")
     ax.set_ylabel("Cumulative fraction")
     ax.set_xlim(0, 100)
-axes[0].set_title("By treatment")
-axes[1].set_title("By genotype")
+axes[0].set_title(f"By {treat_label}")
+axes[1].set_title(f"By {geno_label}")
 fig.suptitle(
     f"Estimated vessel diameter (intravascular plaques) \u2014 {cohort}",
     fontsize=13,
@@ -430,7 +451,7 @@ plt.close(fig)
 
 subj_calibre = (
     df_inside.groupby(
-        ["subject", "treatment", "genotype", "sex"], observed=True
+        ["subject", TREAT_COL, GENO_COL, SEX_COL], observed=True
     )
     .agg(
         n_intravascular=("min_vessel_diam_um", "size"),
@@ -441,8 +462,8 @@ subj_calibre = (
     )
     .reset_index()
 )
-subj_calibre["genotype"] = pd.Categorical(
-    subj_calibre["genotype"], categories=geno_present, ordered=True
+subj_calibre[GENO_COL] = pd.Categorical(
+    subj_calibre[GENO_COL], categories=geno_present, ordered=True
 )
 calibre_metrics = [
     ("mean_min_diam_um", "Mean estimated min vessel diam. (\u00b5m)"),
@@ -451,14 +472,14 @@ calibre_metrics = [
 fig, axes = plt.subplots(1, 2, figsize=(11, 5))
 for ax, (col, label) in zip(axes, calibre_metrics):
     if n_geno > 1:
-        boxstrip(ax, subj_calibre, x="treatment", y=col, hue="genotype",
+        boxstrip(ax, subj_calibre, x=TREAT_COL, y=col, hue=GENO_COL,
                  order=TREAT_ORDER, hue_order=geno_present, palette=geno_palette,
                  ylabel=label)
     else:
-        sns.boxplot(data=subj_calibre, x="treatment", y=col, order=TREAT_ORDER,
+        sns.boxplot(data=subj_calibre, x=TREAT_COL, y=col, order=TREAT_ORDER,
                     palette=TREAT_PALETTE, fill=False, linewidth=1.2, fliersize=0,
                     ax=ax)
-        sns.stripplot(data=subj_calibre, x="treatment", y=col, order=TREAT_ORDER,
+        sns.stripplot(data=subj_calibre, x=TREAT_COL, y=col, order=TREAT_ORDER,
                       palette=TREAT_PALETTE, alpha=0.75, size=7, jitter=True, ax=ax)
         ax.set_ylabel(label)
     ax.set_xlabel("")
@@ -471,8 +492,10 @@ plt.close(fig)
 
 def subject_vessel_diam_fractions(
     plaque_df,
-    group_cols=("subject", "genotype", "treatment", "sex"),
+    group_cols=None,
 ):
+    if group_cols is None:
+        group_cols = ("subject", GENO_COL, TREAT_COL, SEX_COL)
     inside = plaque_df.loc[plaque_df["sdt_CD31_um"] < 0]
     counts = (
         inside.groupby(list(group_cols) + ["vessel_diam_bin"], observed=True)
@@ -491,8 +514,8 @@ def subject_vessel_diam_fractions(
     return out
 
 subj_diam = subject_vessel_diam_fractions(df)
-subj_diam["genotype"] = pd.Categorical(
-    subj_diam["genotype"], categories=geno_present, ordered=True
+subj_diam[GENO_COL] = pd.Categorical(
+    subj_diam[GENO_COL], categories=geno_present, ordered=True
 )
 diam_bins = df["vessel_diam_bin"].cat.categories.tolist()
 fig, axes = plt.subplots(1, len(diam_bins), figsize=(5 * len(diam_bins), 5))
@@ -501,14 +524,14 @@ if len(diam_bins) == 1:
 for ax, bin_label in zip(axes, diam_bins):
     bin_data = subj_diam.loc[subj_diam["vessel_diam_bin"] == bin_label]
     if n_geno > 1:
-        boxstrip(ax, bin_data, x="treatment", y="fraction", hue="genotype",
+        boxstrip(ax, bin_data, x=TREAT_COL, y="fraction", hue=GENO_COL,
                  order=TREAT_ORDER, hue_order=geno_present, palette=geno_palette,
                  ylabel="Fraction of intravascular plaques")
     else:
-        sns.boxplot(data=bin_data, x="treatment", y="fraction", order=TREAT_ORDER,
+        sns.boxplot(data=bin_data, x=TREAT_COL, y="fraction", order=TREAT_ORDER,
                     palette=TREAT_PALETTE, fill=False, linewidth=1.2, fliersize=0,
                     ax=ax)
-        sns.stripplot(data=bin_data, x="treatment", y="fraction", order=TREAT_ORDER,
+        sns.stripplot(data=bin_data, x=TREAT_COL, y="fraction", order=TREAT_ORDER,
                       palette=TREAT_PALETTE, alpha=0.75, size=7, jitter=True, ax=ax)
         ax.set_ylabel("Fraction of intravascular plaques")
     ax.set_title(f"Vessel diam. {bin_label}", fontsize=10)
@@ -562,7 +585,7 @@ group_list = [
     (t, g)
     for t in TREAT_ORDER
     for g in GENO_ORDER
-    if ((df["treatment"] == t) & (df["genotype"] == g)).any()
+    if ((df[TREAT_COL] == t) & (df[GENO_COL] == g)).any()
 ]
 n_groups = len(group_list)
 
@@ -586,7 +609,7 @@ fig, axes = plt.subplots(
     2, n_groups, figsize=(4.5 * n_groups, 8), squeeze=False
 )
 for col_idx, (treat, geno) in enumerate(group_list):
-    mask = (df["treatment"] == treat) & (df["genotype"] == geno)
+    mask = (df[TREAT_COL] == treat) & (df[GENO_COL] == geno)
     subset = df.loc[mask].sample(
         min(N_SAMPLE_GROUP, int(mask.sum())), random_state=42
     )
@@ -657,7 +680,7 @@ fig, axes = plt.subplots(
     squeeze=False,
 )
 for col_idx, (treat, geno) in enumerate(group_list):
-    mask = (df["treatment"] == treat) & (df["genotype"] == geno)
+    mask = (df[TREAT_COL] == treat) & (df[GENO_COL] == geno)
     group_df = df.loc[mask]
     for bin_idx, (bin_label, bin_color) in enumerate(
         zip(SDT_BIN_LABELS_UM, SDT_BIN_COLORS)
@@ -755,7 +778,7 @@ def _anim_update(frame_idx):
     in_window = (df["sdt_CD31_um"] >= start_um) & (df["sdt_CD31_um"] < end_um)
     artists = []
     for (col_idx, row_idx), (sc, xcol, ycol, treat, geno) in _scat_info.items():
-        group_mask = in_window & (df["treatment"] == treat) & (df["genotype"] == geno)
+        group_mask = in_window & (df[TREAT_COL] == treat) & (df[GENO_COL] == geno)
         pts = df.loc[group_mask, [xcol, ycol]]
         if len(pts) > N_ANIM_SAMPLE:
             pts = pts.sample(N_ANIM_SAMPLE, random_state=frame_idx)

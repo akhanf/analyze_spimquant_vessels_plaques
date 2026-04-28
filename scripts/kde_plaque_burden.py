@@ -34,10 +34,35 @@ import seaborn as sns  # noqa: E402
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # ── Snakemake integration ────────────────────────────────────────────────────
+# ── Default plot config (used when running outside Snakemake) ─────────────────
+# factors is an ordered list: index 0 = primary, 1 = secondary, 2 = tertiary.
+DEFAULT_PLOT_CONFIG = {
+    "factors": [
+        {
+            "column": "treatment",
+            "order": ["PBS", "Lecanemab"],
+            "palette": {"PBS": "#4C72B0", "Lecanemab": "#DD8452"},
+        },
+        {
+            "column": "genotype",
+            "order": ["ApoE3", "ApoE4"],
+            "palette": {"ApoE3": "#55A868", "ApoE4": "#C44E52"},
+        },
+        {
+            "column": "sex",
+            "order": ["M", "F"],
+            "palette": {"M": "#8172B2", "F": "#CCB974"},
+        },
+    ],
+    "primary_metric": "plaque_density",
+    "volume_threshold_ml": 1e-4,
+}
+
 if "snakemake" in dir():
     input_parquet = str(snakemake.input.parquet)  # noqa: F821
     output_figs = dict(snakemake.output)  # noqa: F821
     cohort = snakemake.wildcards.cohort  # noqa: F821
+    cfg = snakemake.params.plot_config  # noqa: F821
 else:
     import argparse
 
@@ -48,19 +73,31 @@ else:
     args = parser.parse_args()
     input_parquet = args.parquet
     cohort = args.cohort
+    cfg = DEFAULT_PLOT_CONFIG
     output_figs = {
         "kde_plaque_burden": f"{args.output_dir}/fig_{cohort}_kde_plaque_burden.png",
         "kde_plaque_burden_zslices": f"{args.output_dir}/fig_{cohort}_kde_plaque_burden_zslices.png",
     }
 
-# ── Constants ────────────────────────────────────────────────────────────────
+# ── Extract plot config ───────────────────────────────────────────────────────
 sns.set_theme(style="white", font_scale=1.1)
 
-TREAT_ORDER = ["PBS", "Lecanemab"]
-TREAT_PALETTE = {"PBS": "#4C72B0", "Lecanemab": "#DD8452"}
-GENO_ORDER = ["ApoE3", "ApoE4"]
+# factors[0] = primary factor (e.g. treatment), factors[1] = secondary (e.g. genotype).
+# Swapping entries in config.yml changes which factor plays which role.
+_factors = cfg["factors"]
+treat_cfg = _factors[0]
+TREAT_COL = treat_cfg["column"]
+TREAT_ORDER = treat_cfg["order"]
+TREAT_PALETTE = treat_cfg["palette"]
 
-VOL_THRESH_ML = 1e-4  # max plaque volume filter (removes large artifacts, same as other scripts)
+geno_cfg = _factors[1] if len(_factors) > 1 else {}
+GENO_COL = geno_cfg.get("column", "")
+GENO_ORDER = geno_cfg.get("order", [])
+
+VOL_THRESH_ML = cfg.get("volume_threshold_ml", 1e-4)
+
+treat_label = TREAT_COL.replace("_", " ").title()
+geno_label = GENO_COL.replace("_", " ").title()
 
 # KDE/grid parameters
 N_KDE_MAX = 12_000   # max plaques per group for KDE fitting (balances accuracy vs runtime)
@@ -94,8 +131,8 @@ def _alpha_cmap(hex_color, name):
 
 
 TREAT_CMAP = {
-    treat: _alpha_cmap(color, f"cmap_{treat.lower()}")
-    for treat, color in TREAT_PALETTE.items()
+    treat: _alpha_cmap(color, f"cmap_treat_{treat.replace(' ', '_').lower()}_{i}")
+    for i, (treat, color) in enumerate(TREAT_PALETTE.items())
 }
 
 
@@ -237,11 +274,11 @@ def _render_density_overlay(ax, treat_data, treat_present, proj_key, vmax=None):
 df_raw = pd.read_parquet(input_parquet)
 df = df_raw.loc[df_raw["plaque_vol_ml"] <= VOL_THRESH_ML].copy()
 
-geno_present = [g for g in GENO_ORDER if (df["genotype"] == g).any()]
-treat_present = [t for t in TREAT_ORDER if (df["treatment"] == t).any()]
+geno_present = [g for g in GENO_ORDER if (df[GENO_COL] == g).any()]
+treat_present = [t for t in TREAT_ORDER if (df[TREAT_COL] == t).any()]
 
-df["genotype"] = pd.Categorical(df["genotype"], categories=geno_present, ordered=True)
-df["treatment"] = pd.Categorical(df["treatment"], categories=treat_present, ordered=True)
+df[GENO_COL] = pd.Categorical(df[GENO_COL], categories=geno_present, ordered=True)
+df[TREAT_COL] = pd.Categorical(df[TREAT_COL], categories=treat_present, ordered=True)
 
 # Shared axis limits derived from entire dataset (consistent across groups)
 x_lim = (df["template_x"].quantile(0.002), df["template_x"].quantile(0.998))
@@ -252,7 +289,7 @@ z_lim = (df["template_z"].quantile(0.002), df["template_z"].quantile(0.998))
 all_kde = {}  # {(geno, treat): {"density_3d": ..., "xi": ..., "yi": ..., "zi": ...}}
 for geno in geno_present:
     for treat in treat_present:
-        mask = (df["genotype"] == geno) & (df["treatment"] == treat)
+        mask = (df[GENO_COL] == geno) & (df[TREAT_COL] == treat)
         tdf = df.loc[mask]
         if len(tdf) < MIN_PLAQUES_FOR_KDE:
             continue
@@ -309,7 +346,7 @@ for row_idx, geno in enumerate(geno_present):
             ]
             ax.legend(
                 handles=legend_handles,
-                title="Treatment",
+                title=treat_label,
                 loc="upper right",
                 fontsize=9,
             )
@@ -402,7 +439,7 @@ legend_handles = [
 ]
 fig2.legend(
     handles=legend_handles,
-    title="Treatment",
+    title=treat_label,
     loc="upper right",
     fontsize=9,
     bbox_to_anchor=(1.0, 1.0),

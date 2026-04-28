@@ -3,7 +3,7 @@
 Reads  : roi_data_{cohort}.parquet  +  tpl-ABAv3_seg-all_dseg.nii.gz
 Writes (one file per figure):
   fig_{cohort}_roi_top_density.png         bar chart of top 20 regions by treatment effect
-                                           (log₂ FC of total plaque volume, Lecanemab / PBS)
+                                           (log₂ FC of primary metric, group2 / group1)
   fig_{cohort}_roi_density_boxplot.png     boxplot of density in top regions by treatment
   fig_{cohort}_roi_metric_heatmap.png      multi-metric normalised heatmap
   fig_{cohort}_roi_proximity_fractions.png vessel-proximity fraction boxplots (top regions)
@@ -14,8 +14,8 @@ Writes (one file per figure):
   fig_{cohort}_atlas_mean_diam.png         atlas MIP coloured by mean plaque diameter
   fig_{cohort}_atlas_frac_inside.png       atlas MIP coloured by fraction inside vessel
 Writes (CSV):
-  {cohort}_roi_treatment_stats.csv         per-region t-test stats (total plaque volume,
-                                           Lecanemab vs PBS) with FDR-corrected p-values
+  {cohort}_roi_treatment_stats.csv         per-region t-test stats (primary metric,
+                                           group2 vs group1) with FDR-corrected p-values
 """
 
 import warnings
@@ -37,13 +37,34 @@ input_atlas = str(snakemake.input.atlas)  # noqa: F821
 output_figs = dict(snakemake.output)  # noqa: F821
 output_stats_csv = str(snakemake.output.roi_treatment_stats)  # noqa: F821
 cohort = snakemake.wildcards.cohort  # noqa: F821
+cfg = snakemake.params.plot_config  # noqa: F821
 
-# ── Constants ────────────────────────────────────────────────────────────────
+# ── Extract plot config ───────────────────────────────────────────────────────
 sns.set_theme(style="whitegrid", font_scale=1.1)
-TREAT_ORDER = ["PBS", "Lecanemab"]
-TREAT_PALETTE = {"PBS": "#4C72B0", "Lecanemab": "#DD8452"}
-GENO_ORDER = ["ApoE3", "ApoE4"]
-GENO_PALETTE = {"ApoE3": "#55A868", "ApoE4": "#C44E52"}
+
+# factors[0] = primary factor (e.g. treatment), factors[1] = secondary (e.g. genotype).
+# Swapping entries in config.yml changes which factor plays which role.
+_factors = cfg["factors"]
+treat_cfg = _factors[0]
+TREAT_COL = treat_cfg["column"]
+TREAT_ORDER = treat_cfg["order"]
+TREAT_PALETTE = treat_cfg["palette"]
+
+geno_cfg = _factors[1] if len(_factors) > 1 else {}
+GENO_COL = geno_cfg.get("column", "")
+GENO_ORDER = geno_cfg.get("order", [])
+GENO_PALETTE = geno_cfg.get("palette", {})
+
+METRIC = cfg["primary_metric"]
+VOL_THRESH_ML = cfg.get("volume_threshold_ml", 1e-4)
+
+# Shorthand for the two treatment group labels (group1 = control, group2 = treatment)
+GROUP1 = TREAT_ORDER[0]
+GROUP2 = TREAT_ORDER[1]
+
+treat_label = TREAT_COL.replace("_", " ").title()
+geno_label = GENO_COL.replace("_", " ").title()
+
 TOP_N = 20
 # Small constant added to volume values before taking log ratios to avoid log(0).
 PSEUDOCOUNT = 1e-9
@@ -92,63 +113,63 @@ def plot_atlas_heatmap(vol, title="", cmap="hot", cbar_label="",
 
 def roi_fold_change(roi_df, metric="plaque_density", top_idx=None, top_regions=None,
                     geno_order=None):
-    """Return a (region × genotype) DataFrame of median fold-changes Lec / PBS."""
+    """Return a (region × genotype) DataFrame of median fold-changes group2 / group1."""
     if geno_order is None:
         geno_order = GENO_ORDER
     sub = roi_df.loc[roi_df["index"].isin(top_idx)].copy()
     rows = []
     for geno in geno_order:
         for _, row in top_regions.iterrows():
-            pbs = sub.loc[
-                (sub["genotype"] == geno) & (sub["treatment"] == "PBS")
+            group1 = sub.loc[
+                (sub[GENO_COL] == geno) & (sub[TREAT_COL] == GROUP1)
                 & (sub["index"] == row["index"]), metric
             ]
-            lec = sub.loc[
-                (sub["genotype"] == geno) & (sub["treatment"] == "Lecanemab")
+            group2 = sub.loc[
+                (sub[GENO_COL] == geno) & (sub[TREAT_COL] == GROUP2)
                 & (sub["index"] == row["index"]), metric
             ]
             fc = (
-                lec.median() / pbs.median()
-                if (len(pbs) > 0 and len(lec) > 0 and pbs.median() > 0)
+                group2.median() / group1.median()
+                if (len(group1) > 0 and len(group2) > 0 and group1.median() > 0)
                 else np.nan
             )
-            rows.append({"genotype": geno, "name": row["name"], "fold_change": fc})
-    return pd.DataFrame(rows).pivot(index="name", columns="genotype", values="fold_change")
+            rows.append({GENO_COL: geno, "name": row["name"], "fold_change": fc})
+    return pd.DataFrame(rows).pivot(index="name", columns=GENO_COL, values="fold_change")
 
 
 def compute_region_treatment_stats(roi_df, metric="total_vol_ml"):
-    """Return per-region t-test statistics (Lecanemab vs PBS) with FDR correction.
+    """Return per-region t-test statistics (group2 vs group1) with FDR correction.
 
     For each region, an independent two-sample t-test is run on ``metric``
-    between the Lecanemab and PBS groups across all subjects.  Benjamini-
+    between the two treatment groups across all subjects.  Benjamini-
     Hochberg FDR correction is applied across all tested regions.
     """
     rows = []
     for (ridx, name), grp in roi_df.groupby(["index", "name"], observed=True):
-        pbs = grp.loc[grp["treatment"] == "PBS", metric].dropna().values
-        lec = grp.loc[grp["treatment"] == "Lecanemab", metric].dropna().values
-        n_pbs, n_lec = len(pbs), len(lec)
-        mean_pbs = float(np.mean(pbs)) if n_pbs > 0 else np.nan
-        mean_lec = float(np.mean(lec)) if n_lec > 0 else np.nan
-        median_pbs = float(np.median(pbs)) if n_pbs > 0 else np.nan
-        median_lec = float(np.median(lec)) if n_lec > 0 else np.nan
+        group1_vals = grp.loc[grp[TREAT_COL] == GROUP1, metric].dropna().values
+        group2_vals = grp.loc[grp[TREAT_COL] == GROUP2, metric].dropna().values
+        n1, n2 = len(group1_vals), len(group2_vals)
+        mean1 = float(np.mean(group1_vals)) if n1 > 0 else np.nan
+        mean2 = float(np.mean(group2_vals)) if n2 > 0 else np.nan
+        median1 = float(np.median(group1_vals)) if n1 > 0 else np.nan
+        median2 = float(np.median(group2_vals)) if n2 > 0 else np.nan
         log2fc = np.log2(
-            (mean_lec + PSEUDOCOUNT) / (mean_pbs + PSEUDOCOUNT)
-        ) if (n_pbs > 0 and n_lec > 0) else np.nan
-        if n_pbs >= 2 and n_lec >= 2:
-            t_stat, p_val = stats.ttest_ind(lec, pbs, equal_var=False)
+            (mean2 + PSEUDOCOUNT) / (mean1 + PSEUDOCOUNT)
+        ) if (n1 > 0 and n2 > 0) else np.nan
+        if n1 >= 2 and n2 >= 2:
+            t_stat, p_val = stats.ttest_ind(group2_vals, group1_vals, equal_var=False)
         else:
             t_stat, p_val = np.nan, np.nan
         rows.append({
             "index": ridx,
             "name": name,
-            "n_PBS": n_pbs,
-            "n_Lecanemab": n_lec,
-            "mean_PBS": mean_pbs,
-            "mean_Lecanemab": mean_lec,
-            "median_PBS": median_pbs,
-            "median_Lecanemab": median_lec,
-            "log2fc_Lec_over_PBS": log2fc,
+            f"n_{GROUP1}": n1,
+            f"n_{GROUP2}": n2,
+            f"mean_{GROUP1}": mean1,
+            f"mean_{GROUP2}": mean2,
+            f"median_{GROUP1}": median1,
+            f"median_{GROUP2}": median2,
+            "log2fc": log2fc,
             "t_stat": t_stat,
             "p_value": p_val,
         })
@@ -169,9 +190,9 @@ atlas_img = nib.load(input_atlas)
 atlas_data = atlas_img.get_fdata().astype(np.int32)
 
 roi_df = roi_df_raw.loc[roi_df_raw["volume_mm3"] > 0].copy()
-roi_df["treatment"] = pd.Categorical(roi_df["treatment"], categories=TREAT_ORDER, ordered=True)
-geno_present = [g for g in GENO_ORDER if (roi_df["genotype"] == g).any()]
-roi_df["genotype"] = pd.Categorical(roi_df["genotype"], categories=geno_present, ordered=True)
+roi_df[TREAT_COL] = pd.Categorical(roi_df[TREAT_COL], categories=TREAT_ORDER, ordered=True)
+geno_present = [g for g in GENO_ORDER if (roi_df[GENO_COL] == g).any()]
+roi_df[GENO_COL] = pd.Categorical(roi_df[GENO_COL], categories=geno_present, ordered=True)
 geno_palette = {g: GENO_PALETTE[g] for g in geno_present}
 n_geno = len(geno_present)
 
@@ -185,28 +206,28 @@ roi_mean = (
     roi_df.groupby(["index", "name"], observed=True)[METRIC_COLS].mean().reset_index()
 )
 
-# Compute treatment effect: log₂ fold-change (Lecanemab / PBS) for total plaque volume.
+# Compute treatment effect: log₂ fold-change (group2 / group1) for the primary metric.
 # Regions with the most negative log₂ FC have the largest treatment-driven reduction.
 _treat_med = (
-    roi_df.groupby(["index", "name", "treatment"], observed=True)[snakemake.params.metric]
+    roi_df.groupby(["index", "name", TREAT_COL], observed=True)[METRIC]
     .median()
     .reset_index()
-    .pivot_table(index=["index", "name"], columns="treatment", values=snakemake.params.metric)
+    .pivot_table(index=["index", "name"], columns=TREAT_COL, values=METRIC)
     .reset_index()
 )
 _treat_med.columns.name = None
-_treat_med["lec_pbs_log2fc"] = np.log2(
-    (_treat_med["Lecanemab"] + PSEUDOCOUNT) / (_treat_med["PBS"] + PSEUDOCOUNT)
+_treat_med["log2fc_treat"] = np.log2(
+    (_treat_med[GROUP2] + PSEUDOCOUNT) / (_treat_med[GROUP1] + PSEUDOCOUNT)
 )
 roi_mean = roi_mean.merge(
-    _treat_med[["index", "name", "lec_pbs_log2fc"]], on=["index", "name"], how="left"
+    _treat_med[["index", "name", "log2fc_treat"]], on=["index", "name"], how="left"
 )
 
 top_regions = (
-    roi_mean.nsmallest(TOP_N, "lec_pbs_log2fc")[
+    roi_mean.nsmallest(TOP_N, "log2fc_treat")[
         ["index", "name", "plaque_density", "plaque_count", "vol_density_ml", "total_vol_ml",
          "mean_diam_um", "frac_inside_vessel", "frac_near_vessel", "frac_far_vessel",
-         "lec_pbs_log2fc"]
+         "log2fc_treat"]
     ].reset_index(drop=True)
 )
 top_idx = top_regions["index"].tolist()
@@ -214,7 +235,7 @@ roi_top = roi_df.loc[roi_df["index"].isin(top_idx)].copy()
 roi_top["region_abbr"] = roi_top["name"].str.replace(r"^(left|right) ", "", regex=True)
 
 # ── Per-region treatment statistics (CSV) ────────────────────────────────────
-region_stats = compute_region_treatment_stats(roi_df, metric=snakemake.params.metric)
+region_stats = compute_region_treatment_stats(roi_df, metric=METRIC)
 region_stats.to_csv(output_stats_csv, index=False)
 
 
@@ -222,13 +243,15 @@ region_stats.to_csv(output_stats_csv, index=False)
 fig, ax = plt.subplots(figsize=(10, 6))
 ax.barh(
     top_regions["name"],
-    top_regions["lec_pbs_log2fc"],
+    top_regions["log2fc_treat"],
     color="steelblue", edgecolor="white", height=0.7,
 )
 ax.axvline(0, color="black", linewidth=0.8, linestyle="--")
-ax.set_xlabel("log\u2082 fold-change total plaque volume (Lecanemab / PBS)")
+ax.set_xlabel(
+    f"log\u2082 fold-change {METRIC.replace('_', ' ')} ({GROUP2} / {GROUP1})"
+)
 ax.set_title(
-    f"Top {TOP_N} regions by treatment effect on total plaque volume \u2014 {cohort}"
+    f"Top {TOP_N} regions by {treat_label} effect on {METRIC.replace('_', ' ')} \u2014 {cohort}"
 )
 ax.invert_yaxis()
 plt.tight_layout()
@@ -237,17 +260,17 @@ plt.close(fig)
 
 fig, axes = plt.subplots(1, n_geno, figsize=(8 * n_geno, 7), sharey=True, squeeze=False)
 for ax, geno in zip(axes[0], geno_present):
-    sub = roi_top.loc[roi_top["genotype"] == geno]
+    sub = roi_top.loc[roi_top[GENO_COL] == geno]
     sns.boxplot(
-        data=sub, y="region_abbr", x="plaque_density", hue="treatment",
+        data=sub, y="region_abbr", x="plaque_density", hue=TREAT_COL,
         hue_order=TREAT_ORDER, palette=TREAT_PALETTE, orient="h", width=0.6, ax=ax,
     )
     ax.set_title(geno, fontsize=13)
     ax.set_xlabel("Plaque density (plaques / mm\u00b3)")
     ax.set_ylabel("Region")
-    ax.legend(title="Treatment", loc="lower right")
+    ax.legend(title=treat_label, loc="lower right")
 fig.suptitle(
-    f"Top {TOP_N} regions \u2014 plaque density by treatment \u2014 {cohort}",
+    f"Top {TOP_N} regions \u2014 plaque density by {treat_label} \u2014 {cohort}",
     fontsize=14,
 )
 plt.tight_layout()
@@ -293,13 +316,13 @@ prox_labels = ["Inside vessel", "Near vessel", "Far from vessel"]
 fig, axes = plt.subplots(1, len(prox_cols), figsize=(18, 7), sharey=True)
 for ax, col, label in zip(axes, prox_cols, prox_labels):
     sns.boxplot(
-        data=roi_top, y="region_abbr", x=col, hue="treatment",
+        data=roi_top, y="region_abbr", x=col, hue=TREAT_COL,
         hue_order=TREAT_ORDER, palette=TREAT_PALETTE, orient="h", width=0.6, ax=ax,
     )
     ax.set_title(label, fontsize=12)
     ax.set_xlabel("Fraction of plaques")
     ax.set_ylabel("Region" if ax is axes[0] else "")
-    ax.legend(title="Treatment", fontsize=8)
+    ax.legend(title=treat_label, fontsize=8)
 fig.suptitle(
     f"Vessel-proximity fractions \u2014 top {TOP_N} regions \u2014 {cohort}",
     fontsize=14,
@@ -322,8 +345,8 @@ ax.set_xticklabels(fc_df.columns, fontsize=11)
 ax.set_yticks(range(len(fc_df)))
 ax.set_yticklabels(fc_df.index, fontsize=9)
 cbar = plt.colorbar(im, ax=ax)
-cbar.set_label("log\u2082 fold-change (Lecanemab / PBS)")
-ax.set_title(f"Treatment fold-change per ROI \u2014 {cohort}", fontsize=13)
+cbar.set_label(f"log\u2082 fold-change ({GROUP2} / {GROUP1})")
+ax.set_title(f"{treat_label} fold-change per ROI \u2014 {cohort}", fontsize=13)
 plt.tight_layout()
 plt.savefig(output_figs["roi_fold_change"], dpi=150)
 plt.close(fig)
@@ -343,7 +366,7 @@ group_vols = {}
 for geno in geno_present:
     for treat in TREAT_ORDER:
         grp_density = (
-            roi_df.loc[(roi_df["genotype"] == geno) & (roi_df["treatment"] == treat)]
+            roi_df.loc[(roi_df[GENO_COL] == geno) & (roi_df[TREAT_COL] == treat)]
             .groupby("index", observed=True)["plaque_density"]
             .mean()
         )
@@ -376,7 +399,7 @@ for gi, geno in enumerate(geno_present):
             if ti == len(TREAT_ORDER) - 1 and pi == 2:
                 plt.colorbar(im, ax=ax, label="n / mm\u00b3", shrink=0.8)
 fig.suptitle(
-    f"Plaque density heatmaps by treatment \u00d7 genotype \u2014 {cohort}",
+    f"Plaque density heatmaps by {treat_label} \u00d7 {geno_label} \u2014 {cohort}",
     fontsize=14,
 )
 plt.tight_layout()
@@ -385,19 +408,19 @@ plt.close(fig)
 
 fc_vols = {}
 for geno in geno_present:
-    pbs_mean = (
-        roi_df.loc[(roi_df["genotype"] == geno) & (roi_df["treatment"] == "PBS")]
+    group1_mean = (
+        roi_df.loc[(roi_df[GENO_COL] == geno) & (roi_df[TREAT_COL] == GROUP1)]
         .groupby("index", observed=True)["plaque_density"]
         .mean()
     )
-    lec_mean = (
-        roi_df.loc[(roi_df["genotype"] == geno) & (roi_df["treatment"] == "Lecanemab")]
+    group2_mean = (
+        roi_df.loc[(roi_df[GENO_COL] == geno) & (roi_df[TREAT_COL] == GROUP2)]
         .groupby("index", observed=True)["plaque_density"]
         .mean()
     )
-    common = pbs_mean.index.intersection(lec_mean.index)
+    common = group1_mean.index.intersection(group2_mean.index)
     log2fc = np.log2(
-        (lec_mean.loc[common] + 1e-9) / (pbs_mean.loc[common] + 1e-9)
+        (group2_mean.loc[common] + 1e-9) / (group1_mean.loc[common] + 1e-9)
     )
     fc_vols[geno] = make_metric_volume(atlas_data, log2fc)
 
@@ -426,10 +449,10 @@ for gi, geno in enumerate(geno_present):
             ax.set_title(geno, fontsize=11)
     plt.colorbar(
         im, ax=axes_grid[gi, -1],
-        label="log\u2082 FC (Lec / PBS)", shrink=0.8,
+        label=f"log\u2082 FC ({GROUP2} / {GROUP1})", shrink=0.8,
     )
 fig.suptitle(
-    f"Treatment fold-change (Lecanemab / PBS) \u2014 {cohort}", fontsize=14
+    f"{treat_label} fold-change ({GROUP2} / {GROUP1}) \u2014 {cohort}", fontsize=14
 )
 plt.tight_layout()
 plt.savefig(output_figs["atlas_fold_change"], dpi=150)

@@ -27,6 +27,30 @@ import pandas as pd  # noqa: E402
 
 warnings.filterwarnings("ignore")
 
+# ── Default plot config (used when running outside Snakemake) ─────────────────
+# factors is an ordered list: index 0 = primary, 1 = secondary, 2 = tertiary.
+DEFAULT_PLOT_CONFIG = {
+    "factors": [
+        {
+            "column": "treatment",
+            "order": ["PBS", "Lecanemab"],
+            "palette": {"PBS": "#4C72B0", "Lecanemab": "#DD8452"},
+        },
+        {
+            "column": "genotype",
+            "order": ["ApoE3", "ApoE4"],
+            "palette": {"ApoE3": "#55A868", "ApoE4": "#C44E52"},
+        },
+        {
+            "column": "sex",
+            "order": ["M", "F"],
+            "palette": {"M": "#8172B2", "F": "#CCB974"},
+        },
+    ],
+    "primary_metric": "plaque_density",
+    "volume_threshold_ml": 1e-4,
+}
+
 # ── Snakemake integration ────────────────────────────────────────────────────
 if "snakemake" in dir():
     input_stats = str(snakemake.input.stats_csv)  # noqa: F821
@@ -34,6 +58,7 @@ if "snakemake" in dir():
     output_figs = dict(snakemake.output)  # noqa: F821
     cohort = snakemake.wildcards.cohort  # noqa: F821
     seg = snakemake.wildcards.seg  # noqa: F821
+    cfg = snakemake.params.plot_config  # noqa: F821
 else:
     import argparse
 
@@ -48,6 +73,7 @@ else:
     input_atlas = args.atlas
     cohort = args.cohort
     seg = args.seg
+    cfg = DEFAULT_PLOT_CONFIG
     output_figs = {
         "atlas_significance": (
             f"{args.output_dir}/fig_{cohort}_{seg}_atlas_significance.png"
@@ -59,6 +85,20 @@ else:
             f"{args.output_dir}/fig_{cohort}_{seg}_significant_regions_bar.png"
         ),
     }
+
+# ── Extract plot config ───────────────────────────────────────────────────────
+# factors[0] = primary factor (e.g. treatment).  Swapping entries in config.yml
+# changes which factor plays which role without touching this script.
+_factors = cfg["factors"]
+treat_cfg = _factors[0]
+TREAT_ORDER = treat_cfg["order"]
+TREAT_PALETTE = treat_cfg["palette"]
+
+GROUP1 = TREAT_ORDER[0]
+GROUP2 = TREAT_ORDER[1]
+
+# Fallback colour used when a category value is absent from the configured palette.
+DEFAULT_COLOR = "#888888"
 
 # ── Constants ────────────────────────────────────────────────────────────────
 FDR_ALPHA = 0.05
@@ -103,7 +143,7 @@ atlas_img = nib.load(input_atlas)
 atlas_data = atlas_img.get_fdata().astype(np.int32)
 
 # Ensure required columns exist
-required_cols = {"index", "name", "log2fc_Lec_over_PBS", "p_value_fdr"}
+required_cols = {"index", "name", "log2fc", "p_value_fdr"}
 if not required_cols.issubset(stats_df.columns):
     raise ValueError(
         f"Stats CSV is missing columns. Expected: {required_cols}. "
@@ -120,14 +160,14 @@ sig_df = stats_df[stats_df["significant"]].copy()
 # ── Figure 1: Atlas – FDR-significant regions coloured by log₂ FC ─────────
 # Significant regions are shown with the coolwarm colormap (centred at 0).
 # Non-significant regions are painted a neutral grey.
-sig_fc = stats_df.set_index("index")["log2fc_Lec_over_PBS"].copy()
+sig_fc = stats_df.set_index("index")["log2fc"].copy()
 sig_fc_masked = sig_fc.where(stats_df.set_index("index")["significant"])
 
 # Build two-layer atlas: grey background + coloured significant regions
 vol_sig = make_metric_volume(atlas_data, sig_fc_masked)
 vol_any = make_metric_volume(
     atlas_data,
-    stats_df.set_index("index")["log2fc_Lec_over_PBS"].where(
+    stats_df.set_index("index")["log2fc"].where(
         stats_df.set_index("index")["p_value_fdr"].notna()
     ),
 )
@@ -159,7 +199,7 @@ for ax, proj_sig, proj_any, pname in zip(axes, projs_sig, projs_any, view_names)
     ax.axis("off")
 
 cbar = plt.colorbar(im, ax=axes[-1], shrink=0.8)
-cbar.set_label("log\u2082 FC (Lecanemab / PBS)")
+cbar.set_label(f"log\u2082 FC ({GROUP2} / {GROUP1})")
 n_sig = int(stats_df["significant"].sum())
 fig.suptitle(
     f"FDR-significant regions (n\u2009=\u2009{n_sig}, FDR\u2009<\u2009{FDR_ALPHA})"
@@ -176,28 +216,28 @@ fig, ax = plt.subplots(figsize=(8, 6))
 # Non-significant: grey
 ns_mask = ~stats_df["significant"] & stats_df["p_value_fdr"].notna()
 ax.scatter(
-    stats_df.loc[ns_mask, "log2fc_Lec_over_PBS"],
+    stats_df.loc[ns_mask, "log2fc"],
     stats_df.loc[ns_mask, "neg_log10_fdr"],
     color=GREY, alpha=0.5, s=20, linewidths=0, label="Not significant",
 )
 
-# Significant decrease (Lecanemab < PBS): blue
-dec_mask = stats_df["significant"] & (stats_df["log2fc_Lec_over_PBS"] < 0)
+# Significant decrease (group2 < group1): colour of group1
+dec_mask = stats_df["significant"] & (stats_df["log2fc"] < 0)
 ax.scatter(
-    stats_df.loc[dec_mask, "log2fc_Lec_over_PBS"],
+    stats_df.loc[dec_mask, "log2fc"],
     stats_df.loc[dec_mask, "neg_log10_fdr"],
-    color="#4C72B0", alpha=0.85, s=45, linewidths=0,
-    label="Significant decrease",
+    color=TREAT_PALETTE.get(GROUP1, DEFAULT_COLOR), alpha=0.85, s=45, linewidths=0,
+    label=f"Significant decrease ({GROUP2} < {GROUP1})",
     zorder=3,
 )
 
-# Significant increase (Lecanemab > PBS): orange
-inc_mask = stats_df["significant"] & (stats_df["log2fc_Lec_over_PBS"] >= 0)
+# Significant increase (group2 > group1): colour of group2
+inc_mask = stats_df["significant"] & (stats_df["log2fc"] >= 0)
 ax.scatter(
-    stats_df.loc[inc_mask, "log2fc_Lec_over_PBS"],
+    stats_df.loc[inc_mask, "log2fc"],
     stats_df.loc[inc_mask, "neg_log10_fdr"],
-    color="#DD8452", alpha=0.85, s=45, linewidths=0,
-    label="Significant increase",
+    color=TREAT_PALETTE.get(GROUP2, DEFAULT_COLOR), alpha=0.85, s=45, linewidths=0,
+    label=f"Significant increase ({GROUP2} > {GROUP1})",
     zorder=3,
 )
 
@@ -210,7 +250,7 @@ top_hits = (
 for _, row in top_hits.iterrows():
     ax.annotate(
         row["name"],
-        xy=(row["log2fc_Lec_over_PBS"], row["neg_log10_fdr"]),
+        xy=(row["log2fc"], row["neg_log10_fdr"]),
         xytext=(6, 2), textcoords="offset points",
         fontsize=7, va="center",
         arrowprops=dict(arrowstyle="-", color="gray", lw=0.6),
@@ -222,7 +262,7 @@ ax.axhline(threshold_y, color="red", linestyle="--", linewidth=0.9,
            label=f"FDR = {FDR_ALPHA}")
 ax.axvline(0, color="black", linestyle="--", linewidth=0.7, alpha=0.5)
 
-ax.set_xlabel("log\u2082 fold-change (Lecanemab / PBS)", fontsize=11)
+ax.set_xlabel(f"log\u2082 fold-change ({GROUP2} / {GROUP1})", fontsize=11)
 ax.set_ylabel("\u2212log\u2081\u2080 (FDR-adjusted p-value)", fontsize=11)
 ax.set_title(
     f"Volcano plot \u2014 per-region treatment effect \u2014 {cohort} \u2022 {seg}",
@@ -254,11 +294,12 @@ if len(sig_df) == 0:
     plt.close(fig)
 else:
     # Sort by log2FC (most negative = strongest Lecanemab reduction first)
-    plot_df = sig_df.sort_values("log2fc_Lec_over_PBS").head(N_BAR_MAX).reset_index(drop=True)
+    plot_df = sig_df.sort_values("log2fc").head(N_BAR_MAX).reset_index(drop=True)
 
     colors = [
-        "#4C72B0" if fc < 0 else "#DD8452"
-        for fc in plot_df["log2fc_Lec_over_PBS"]
+        TREAT_PALETTE.get(GROUP1, DEFAULT_COLOR) if fc < 0
+        else TREAT_PALETTE.get(GROUP2, DEFAULT_COLOR)
+        for fc in plot_df["log2fc"]
     ]
 
     fig_h = max(4, 0.38 * len(plot_df) + 1.5)
@@ -266,7 +307,7 @@ else:
 
     bars = ax.barh(
         plot_df["name"],
-        plot_df["log2fc_Lec_over_PBS"],
+        plot_df["log2fc"],
         color=colors, edgecolor="white", height=0.7,
     )
 
@@ -282,7 +323,7 @@ else:
         )
 
     ax.axvline(0, color="black", linewidth=0.8, linestyle="--")
-    ax.set_xlabel("log\u2082 fold-change (Lecanemab / PBS)", fontsize=11)
+    ax.set_xlabel(f"log\u2082 fold-change ({GROUP2} / {GROUP1})", fontsize=11)
     ax.set_title(
         f"FDR-significant regions (n\u2009=\u2009{len(sig_df)}) \u2014 "
         f"{cohort} \u2022 {seg}\n"
@@ -295,8 +336,10 @@ else:
     from matplotlib.patches import Patch  # noqa: PLC0415
 
     legend_elements = [
-        Patch(facecolor="#4C72B0", label="Lecanemab < PBS (reduction)"),
-        Patch(facecolor="#DD8452", label="Lecanemab > PBS (increase)"),
+        Patch(facecolor=TREAT_PALETTE.get(GROUP1, DEFAULT_COLOR),
+              label=f"{GROUP2} < {GROUP1} (reduction)"),
+        Patch(facecolor=TREAT_PALETTE.get(GROUP2, DEFAULT_COLOR),
+              label=f"{GROUP2} > {GROUP1} (increase)"),
     ]
     ax.legend(handles=legend_elements, fontsize=9, loc="upper right")
 

@@ -16,8 +16,6 @@
 configfile: 'config.yml'
 
 
-wildcard_constraints:
-    cohort='[0-9a-zA-Z]+'
 
 # ── Cohorts ───────────────────────────────────────────────────────────────────
 COHORTS = config['datasets'].keys()
@@ -102,10 +100,19 @@ rule all:
         expand("figures/fig_{cohort}_{seg}_{fig}.png", cohort=COHORTS, fig=REGIONAL_SIG_FIGS, seg=config['segs']),
 
 
+rule all_indiv:
+    input:
+        expand("figures/fig_{cohort}_{fig}.png", cohort=COHORTS, fig=TREATMENT_FIGS+TREATMENT_STATS_FIGS),
+
+
+rule all_concat:
+    input:
+        expand("figures/fig_{cohort}_{fig}.png", cohort="+".join(COHORTS), fig=TREATMENT_FIGS+TREATMENT_STATS_FIGS),
+
 rule add_vol_to_dseg_tsv:
     input:
-        lut=lambda wildcards: Path(config['template_dir']) / "seg-{seg}_tpl-ABAv3_dseg.tsv",
-        nii=lambda wildcards: Path(config['template_dir']) / "seg-{seg}_tpl-ABAv3_dseg.nii.gz",
+        lut=lambda wildcards: Path(config['template_dir']) / "tpl-ABAv3_seg-{seg}_dseg.tsv",
+        nii=lambda wildcards: Path(config['template_dir']) / "tpl-ABAv3_seg-{seg}_dseg.nii.gz",
     output:
         lut="tpl-ABAv3_seg-{seg}_dseg.tsv"
     script:
@@ -117,12 +124,21 @@ rule import_data:
         participant_tsv=lambda wc: config.get("datasets", {}).get(wc.cohort, {}).get("participant_tsv", ""),
         spimquant_dir=lambda wc: config.get("datasets", {}).get(wc.cohort, {}).get("spimquant_dir", ""),
     output:
-        "data_{cohort}.parquet",
+        "data_{cohort,[a-zA-Z0-9]+}.parquet",
     params:
     log:
         "logs/import_data_{cohort}.log",
     script:
         "scripts/import_data.py"
+
+rule concat_datasets:
+    input:
+        expand("data_{cohort}.parquet",cohort=COHORTS)
+    output:
+        "data_{cohort,[a-zA-Z0-9+]+}.parquet",
+    run:
+        import pandas as pd
+        merged_df = pd.concat([pd.read_parquet(pq) for pq in input], ignore_index=True).to_parquet(output[0],index=False)
 
 
 # ── ROI aggregation ───────────────────────────────────────────────────────────
@@ -142,9 +158,9 @@ rule regional_dataframe:
 rule regional_analysis:
     input:
         roi_parquet="roi_data_{cohort}_seg-{seg}.parquet",
-        atlas=lambda wildcards: Path(config['datasets'][wildcards.cohort]['spimquant_dir']) / "tpl-ABAv3"  / "seg-{seg}_tpl-ABAv3_dseg.nii.gz",
+        atlas=lambda wildcards: Path(config['datasets'][wildcards.cohort]['spimquant_dir']) / "tpl-ABAv3"  / "tpl-ABAv3_seg-{seg}_dseg.nii.gz",
     params:
-        metric="plaque_density",
+        plot_config=config['plot_config'],
     output:
         roi_top_density="figures/fig_{cohort}_{seg}_roi_top_density.png",
         roi_density_boxplot="figures/fig_{cohort}_{seg}_roi_density_boxplot.png",
@@ -163,10 +179,25 @@ rule regional_analysis:
         "scripts/regional_analysis.py"
 
 
+rule compute_subject_metrics:
+    input:
+        parquet="data_{cohort}.parquet"
+    params:
+        plot_config=config['plot_config'],
+    output:
+        tsv="data_subject_{cohort}.tsv"
+    script:
+        "scripts/compute_subject_metrics.py"
+
+
+
+
 # ── Treatment-effect figures ──────────────────────────────────────────────────
 rule treatment_analysis:
     input:
-        parquet="data_{cohort}.parquet",
+        parquet="data_{cohort}.parquet"
+    params:
+        plot_config=config['plot_config'],
     output:
         boxplots_treatment_genotype="figures/fig_{cohort}_boxplots_treatment_genotype.png",
         violin_plaque_size="figures/fig_{cohort}_violin_plaque_size.png",
@@ -180,10 +211,13 @@ rule treatment_analysis:
         "scripts/treatment_effect_analysis.py"
 
 
+
 # ── Vessel-proximity figures ──────────────────────────────────────────────────
 rule vessel_analysis:
     input:
         parquet="data_{cohort}.parquet",
+    params:
+        plot_config=config['plot_config'],
     output:
         sdt_ecdf="figures/fig_{cohort}_sdt_ecdf.png",
         proximity_fractions_stacked="figures/fig_{cohort}_proximity_fractions_stacked.png",
@@ -207,6 +241,8 @@ rule vessel_analysis:
 rule kde_analysis:
     input:
         parquet="data_{cohort}.parquet",
+    params:
+        plot_config=config['plot_config'],
     output:
         kde_plaque_burden="figures/fig_{cohort}_kde_plaque_burden.png",
         kde_plaque_burden_zslices="figures/fig_{cohort}_kde_plaque_burden_zslices.png",
@@ -220,6 +256,8 @@ rule kde_analysis:
 rule treatment_stats:
     input:
         parquet="data_{cohort}.parquet",
+    params:
+        plot_config=config['plot_config'],
     output:
         treatment_stats_boxplots="figures/fig_{cohort}_treatment_stats_boxplots.png",
         treatment_anova_table="{cohort}_treatment_anova_table.csv",
@@ -234,7 +272,9 @@ rule treatment_stats:
 rule regional_significance:
     input:
         stats_csv="{cohort}_{seg}_roi_treatment_stats.csv",
-        atlas=lambda wildcards: Path(config['datasets'][wildcards.cohort]['spimquant_dir']) / "tpl-ABAv3" / "seg-{seg}_tpl-ABAv3_dseg.nii.gz",
+        atlas=lambda wildcards: Path(config['datasets'][wildcards.cohort]['spimquant_dir']) / "tpl-ABAv3" / "tpl-ABAv3_seg-{seg}_dseg.nii.gz",
+    params:
+        plot_config=config['plot_config'],
     output:
         atlas_significance="figures/fig_{cohort}_{seg}_atlas_significance.png",
         regional_volcano="figures/fig_{cohort}_{seg}_regional_volcano.png",

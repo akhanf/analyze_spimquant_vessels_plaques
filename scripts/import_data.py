@@ -23,14 +23,16 @@ VOXEL_VOL_UM3 = 1.6 * 1.6 * 2.75  # µm³ per voxel
 VOXEL_VOL_ML = 0.0016 * 0.0016 * 0.00275  # mL per voxel
 
 
+
 # ── Functions ────────────────────────────────────────────────────────────────
 def load_subject_df(spimquant_dir: str, subject: str) -> pd.DataFrame | None:
     regionpropstats_tsv = (
-        f"{spimquant_dir}/{subject}/micr/"
+        f"{spimquant_dir}/{subject}/tabular/"
         f"{subject}_sample-brain_acq-imaris4x_stain-Abeta_seg-all_"
         f"from-ABAv3_level-5_desc-otsu+k3i2_regionpropstats.tsv"
     )
     if not Path(regionpropstats_tsv).exists():
+        print(f'cannot find {regionpropstats_tsv}')
         return None
     df_subject = pd.read_csv(regionpropstats_tsv, sep="\t")
     df_subject["subject"] = subject
@@ -68,7 +70,8 @@ print(
 )
 
 # add derived variables
-df["sdt_CD31_um"] = df["sdt_CD31"] * 1000.0
+if "sdt_CD31" in df.columns:
+    df["sdt_CD31_um"] = df["sdt_CD31"] * 1000.0
 df["plaque_vol_um3"] = df["nvoxels"] * VOXEL_VOL_UM3
 df["plaque_vol_ml"] = df["nvoxels"] * VOXEL_VOL_ML
 df["equiv_diam_um"] = 2 * ((3 * df["plaque_vol_um3"]) / (4 * np.pi)) ** (1 / 3)
